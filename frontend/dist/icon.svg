@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="80" fill="#9945ff"/>
+  <g transform="translate(256, 256)">
+    <!-- Swords icon for RPS Battleground -->
+    <path d="M -80,-100 L -80,-20 L -100,0 L -80,20 L -60,0 L -80,-20 Z" fill="white"/>
+    <path d="M 80,-100 L 80,-20 L 100,0 L 80,20 L 60,0 L 80,-20 Z" fill="white"/>
+    <circle cx="-80" cy="-100" r="15" fill="#ffcc00"/>
+    <circle cx="80" cy="-100" r="15" fill="#ffcc00"/>
+    <!-- Circle for game element -->
+    <circle cx="0" cy="60" r="40" fill="none" stroke="white" stroke-width="8"/>
+    <text x="0" y="80" font-size="48" font-weight="bold" fill="white" text-anchor="middle" font-family="sans-serif">RPS</text>
+  </g>
+</svg>

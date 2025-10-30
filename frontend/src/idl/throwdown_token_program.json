@@ -1,0 +1,389 @@
+{
+  "version": "0.1.0",
+  "name": "throwdown_token_program",
+  "instructions": [
+    {
+      "name": "CreateGame",
+      "accounts": [],
+      "args": [
+        {
+          "name": "maxPlayers",
+          "type": "u8"
+        },
+        {
+          "name": "buyInLamports",
+          "type": "u64"
+        },
+        {
+          "name": "gameNonce",
+          "type": "u32"
+        }
+      ],
+      "discriminant": {
+        "type": "u8",
+        "value": 0
+      }
+    },
+    {
+      "name": "InitializeRegistryMaster",
+      "accounts": [],
+      "args": [],
+      "discriminant": {
+        "type": "u8",
+        "value": 1
+      }
+    },
+    {
+      "name": "InitializeRegistry",
+      "accounts": [],
+      "args": [
+        {
+          "name": "registryNonce",
+          "type": "u32"
+        }
+      ],
+      "discriminant": {
+        "type": "u8",
+        "value": 2
+      }
+    },
+    {
+      "name": "JoinGame",
+      "accounts": [],
+      "args": [],
+      "discriminant": {
+        "type": "u8",
+        "value": 3
+      }
+    },
+    {
+      "name": "LeaveGame",
+      "accounts": [],
+      "args": [],
+      "discriminant": {
+        "type": "u8",
+        "value": 4
+      }
+    },
+    {
+      "name": "SubmitMoves",
+      "accounts": [],
+      "args": [
+        {
+          "name": "movesHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ],
+      "discriminant": {
+        "type": "u8",
+        "value": 5
+      }
+    },
+    {
+      "name": "RevealMoves",
+      "accounts": [],
+      "args": [
+        {
+          "name": "moves",
+          "type": {
+            "array": [
+              {
+                "defined": "Move"
+              },
+              5
+            ]
+          }
+        },
+        {
+          "name": "salt",
+          "type": "u64"
+        }
+      ],
+      "discriminant": {
+        "type": "u8",
+        "value": 6
+      }
+    },
+    {
+      "name": "ResolveRound",
+      "accounts": [],
+      "args": [],
+      "discriminant": {
+        "type": "u8",
+        "value": 7
+      }
+    },
+    {
+      "name": "FinalizeGame",
+      "accounts": [],
+      "args": [],
+      "discriminant": {
+        "type": "u8",
+        "value": 8
+      }
+    },
+    {
+      "name": "CheckAndAdvanceState",
+      "accounts": [],
+      "args": [],
+      "discriminant": {
+        "type": "u8",
+        "value": 9
+      }
+    }
+  ],
+  "accounts": [
+    {
+      "name": "GameAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "publicKey"
+          },
+          {
+            "name": "maxPlayers",
+            "type": "u8"
+          },
+          {
+            "name": "buyInLamports",
+            "type": "u64"
+          },
+          {
+            "name": "currentPlayers",
+            "type": "u8"
+          },
+          {
+            "name": "state",
+            "type": {
+              "defined": "GameState"
+            }
+          },
+          {
+            "name": "currentRound",
+            "type": "u8"
+          },
+          {
+            "name": "totalRounds",
+            "type": "u8"
+          },
+          {
+            "name": "prizePool",
+            "type": "u64"
+          },
+          {
+            "name": "players",
+            "type": {
+              "vec": {
+                "defined": "PlayerData"
+              }
+            }
+          },
+          {
+            "name": "bracket",
+            "type": {
+              "vec": "bytes"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameRegistry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "registryNonce",
+            "type": "u32"
+          },
+          {
+            "name": "totalSlots",
+            "type": "u32"
+          },
+          {
+            "name": "usedSlots",
+            "type": "u32"
+          },
+          {
+            "name": "activeGames",
+            "type": "u32"
+          },
+          {
+            "name": "games",
+            "type": {
+              "array": [
+                {
+                  "option": {
+                    "defined": "GameIndexEntry"
+                  }
+                },
+                100
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RegistryMaster",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "totalRegistries",
+            "type": "u32"
+          },
+          {
+            "name": "totalGames",
+            "type": "u32"
+          },
+          {
+            "name": "activeGames",
+            "type": "u32"
+          },
+          {
+            "name": "nextGameNonce",
+            "type": "u32"
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "PlayerData",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pubkey",
+            "type": "publicKey"
+          },
+          {
+            "name": "movesCommitted",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "movesRevealed",
+            "type": {
+              "array": [
+                {
+                  "option": {
+                    "defined": "Move"
+                  }
+                },
+                5
+              ]
+            }
+          },
+          {
+            "name": "currentRound",
+            "type": "u8"
+          },
+          {
+            "name": "eliminated",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameIndexEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "gameNonce",
+            "type": "u32"
+          },
+          {
+            "name": "gameAddress",
+            "type": "publicKey"
+          },
+          {
+            "name": "creator",
+            "type": "publicKey"
+          },
+          {
+            "name": "maxPlayers",
+            "type": "u8"
+          },
+          {
+            "name": "currentPlayers",
+            "type": "u8"
+          },
+          {
+            "name": "buyInLamports",
+            "type": "u64"
+          },
+          {
+            "name": "state",
+            "type": {
+              "defined": "GameState"
+            }
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "WaitingForPlayers"
+          },
+          {
+            "name": "SubmittingMoves"
+          },
+          {
+            "name": "RevealingMoves"
+          },
+          {
+            "name": "ResolvingRound"
+          },
+          {
+            "name": "Finished"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Move",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Rock"
+          },
+          {
+            "name": "Paper"
+          },
+          {
+            "name": "Scissors"
+          }
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "origin": "shank",
+    "address": "FVVbupPR89SHJ357hXiWHihsDS7bFHAMqobeGU4rfesG"
+  }
+}

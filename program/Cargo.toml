@@ -1,0 +1,18 @@
+[package]
+name = "throwdown-token-program"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "throwdown_token_program"
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+bytemuck = { version = "1.14", features = ["derive"] }
+pinocchio = "0.5"
+
+[features]
+no-entrypoint = []
+
+[lints.rust]
+unexpected_cfgs = "allow"

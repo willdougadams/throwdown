@@ -1,0 +1,4 @@
+# Suppress warnings from external crates (pinocchio)
+# These are false positives from pinocchio's internal macros
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true
