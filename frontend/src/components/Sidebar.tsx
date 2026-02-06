@@ -67,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
                 textAlign: 'center'
             }}>
                 <h2 style={{ margin: 0, fontSize: theme.fontSize.md, color: theme.colors.text.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.xs }}>
-                    <Gamepad2 size={18} /> RPS
+                    <Gamepad2 size={18} /> Throwdown
                 </h2>
             </div>
 

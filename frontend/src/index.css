@@ -198,6 +198,80 @@ button.danger {
 /* Bracket Navigation - Responsive positioning for sidebar */
 @media (min-width: 768px) {
   .bracket-nav-left {
-    left: calc(240px + 1rem) !important; /* Sidebar width (240px) + padding */
+    left: calc(240px + 1rem) !important;
+    /* Sidebar width (240px) + padding */
+  }
+}
+
+
+/* Idiot Chess Layout */
+.idiot-chess-page {
+  min-height: 100vh;
+  padding: 1rem;
+  background-color: var(--color-background);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.idiot-chess-header {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.idiot-chess-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 600px;
+  /* Mobile constraint */
+}
+
+.idiot-chess-board-wrapper {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 80vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.idiot-chess-info {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .idiot-chess-page {
+    padding: 2rem;
+  }
+
+  .idiot-chess-layout {
+    flex-direction: row;
+    align-items: flex-start;
+    max-width: 1200px;
+    /* Desktop constraint */
+    height: calc(100vh - 150px);
+    /* Fill available height minus header/padding */
+    gap: 2rem;
+  }
+
+  .idiot-chess-board-wrapper {
+    flex: 1;
+    /* Take available space */
+    height: 100%;
+    width: auto;
+    /* Let height drive width via aspect ratio if possible, or contain */
+    justify-content: flex-end;
+    /* Push board towards center/right of its box */
+  }
+
+  .idiot-chess-info {
+    width: 300px;
+    /* Fixed width sidebar on desktop */
+    min-width: 300px;
   }
 }

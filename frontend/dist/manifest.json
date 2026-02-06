@@ -1,6 +1,6 @@
 {
-  "name": "RPS Battleground",
-  "short_name": "RPS Battleground",
+  "name": "Throwdown",
+  "short_name": "Throwdown",
   "description": "Rock-Paper-Scissors tournament battles on Solana blockchain",
   "start_url": "/",
   "display": "standalone",

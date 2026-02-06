@@ -8,6 +8,7 @@ import { NetworkProvider } from './contexts/NetworkContext';
 import Layout from './components/Layout';
 import LandingPage from './pages/LandingPage';
 import GamePage from './pages/GamePage';
+import IdiotChessPage from './pages/IdiotChessPage';
 
 function App() {
     return (
@@ -21,6 +22,7 @@ function App() {
                                     <Routes>
                                         <Route path="/" element={<LandingPage />} />
                                         <Route path="/game/:gameId" element={<GamePage />} />
+                                        <Route path="/idiot-chess" element={<IdiotChessPage />} />
                                     </Routes>
                                 </Layout>
                             </Router>

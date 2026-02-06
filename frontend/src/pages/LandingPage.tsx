@@ -3,7 +3,7 @@ import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { createWeb3ProgramClient, CreateGameParams } from '../services/web3ProgramClient';
 import { GameList } from '../components';
-import { Swords, Plus } from 'lucide-react';
+import { Swords, Plus, Grip } from 'lucide-react';
 import { theme } from '../theme';
 import { useToast } from '../contexts/ToastContext';
 import { useGames } from '../contexts/GamesContext';
@@ -26,7 +26,7 @@ function NewGameModal({ isOpen, onClose, onGameCreated }: {
   const { publicKey } = wallet;
   const navigate = useNavigate();
   const { showToast } = useToast();
-  
+
   const [config, setConfig] = useState<NewGameConfig>({
     playerCount: 8,
     entryFee: 0.1,
@@ -38,15 +38,15 @@ function NewGameModal({ isOpen, onClose, onGameCreated }: {
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof NewGameConfig, string>> = {};
-    
+
     if (!config.gameName.trim()) {
       newErrors.gameName = 'Game name is required';
     }
-    
+
     if (typeof config.entryFee !== 'number' || config.entryFee < 0) {
       newErrors.entryFee = 'Entry fee cannot be negative';
     }
-    
+
     if (typeof config.entryFee === 'number' && config.entryFee > 10) {
       newErrors.entryFee = 'Entry fee cannot exceed 10 SOL';
     }
@@ -332,15 +332,15 @@ function NewGameModal({ isOpen, onClose, onGameCreated }: {
           }}>
             <h4 style={{ margin: '0 0 0.5rem 0', color: theme.colors.text.primary }}>Prize Distribution</h4>
             <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
-              • Winner: {(config.entryFee * config.playerCount * 0.7).toFixed(2)} SOL (70%)<br/>
-              • Runner-up: {(config.entryFee * config.playerCount * 0.2).toFixed(2)} SOL (20%)<br/>
+              • Winner: {(config.entryFee * config.playerCount * 0.7).toFixed(2)} SOL (70%)<br />
+              • Runner-up: {(config.entryFee * config.playerCount * 0.2).toFixed(2)} SOL (20%)<br />
               • Platform fee: {(config.entryFee * config.playerCount * 0.1).toFixed(2)} SOL (10%)
             </div>
           </div>
 
           {/* Buttons */}
-          <div style={{ 
-            display: 'flex', 
+          <div style={{
+            display: 'flex',
             gap: '1rem',
             justifyContent: 'flex-end'
           }}>
@@ -428,13 +428,13 @@ export default function LandingPage() {
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: theme.colors.text.primary, fontSize: isMobile ? '1.2rem' : '1.5rem', margin: 0 }}>
           <Swords size={isMobile ? 20 : 24} /> Throwdown
         </h1>
-        {publicKey && (
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button
-            onClick={() => setShowNewGameModal(true)}
+            onClick={() => window.location.href = '/idiot-chess'}
             style={{
               padding: isMobile ? '0.5rem 0.75rem' : '0.6rem 1rem',
               fontSize: isMobile ? '0.85rem' : '0.9rem',
-              backgroundColor: '#28a745',
+              backgroundColor: theme.colors.secondary.main,
               color: 'white',
               border: 'none',
               borderRadius: '6px',
@@ -444,18 +444,37 @@ export default function LandingPage() {
               gap: '0.4rem'
             }}
           >
-            <Plus size={16} /> {isMobile ? 'New' : 'New Game'}
+            <Grip size={16} /> {isMobile ? 'Chess' : 'Idiot Chess'}
           </button>
-        )}
+          {publicKey && (
+            <button
+              onClick={() => setShowNewGameModal(true)}
+              style={{
+                padding: isMobile ? '0.5rem 0.75rem' : '0.6rem 1rem',
+                fontSize: isMobile ? '0.85rem' : '0.9rem',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+            >
+              <Plus size={16} /> {isMobile ? 'New' : 'New Game'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Games list */}
       <GameList games={allGames} error={error} />
 
       {/* New game modal */}
-      <NewGameModal 
-        isOpen={showNewGameModal} 
-        onClose={() => setShowNewGameModal(false)} 
+      <NewGameModal
+        isOpen={showNewGameModal}
+        onClose={() => setShowNewGameModal(false)}
         onGameCreated={handleGameCreated}
       />
     </div>
