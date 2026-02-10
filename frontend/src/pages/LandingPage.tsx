@@ -446,6 +446,23 @@ export default function LandingPage() {
           >
             <Grip size={16} /> {isMobile ? 'Chess' : 'Idiot Chess'}
           </button>
+          <button
+            onClick={() => window.location.href = '/great-banyan'}
+            style={{
+              padding: isMobile ? '0.5rem 0.75rem' : '0.6rem 1rem',
+              fontSize: isMobile ? '0.85rem' : '0.9rem',
+              backgroundColor: theme.colors.primary.main, // Use primary for variety
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem'
+            }}
+          >
+            <Grip size={16} /> {isMobile ? 'Banyan' : 'Great Banyan'}
+          </button>
           {publicKey && (
             <button
               onClick={() => setShowNewGameModal(true)}

@@ -6,13 +6,13 @@ set -e
 
 echo "Building RPS Bracket Program..."
 
-# Build in program directory - output goes to program/target/deploy/
-cd program
+# Build in programs/rps directory - output goes to programs/rps/target/deploy/
+cd programs/rps
 cargo build-sbf -- -Znext-lockfile-bump
 
 if [ $? -eq 0 ]; then
     echo "✅ Build successful!"
-    echo "📍 Binary location: program/target/deploy/throwdown_token_program.so"
+    echo "📍 Binary location: programs/rps/target/deploy/throwdown_token_program.so"
     ls -lh target/deploy/throwdown_token_program.so
 else
     echo "❌ Build failed!"

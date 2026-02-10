@@ -37,7 +37,7 @@ test: test-program test-frontend
 # Run Rust program tests
 test-program:
 	@echo "🦀 Running Rust tests..."
-	@cd program && cargo test
+	@cd programs/rps && cargo test
 
 # Run frontend tests
 test-frontend:
@@ -51,7 +51,7 @@ build: build-program build-frontend
 # Build Rust program
 build-program:
 	@echo "🦀 Building Rust program..."
-	@cd program && rm -f Cargo.lock && ~/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools/rust/bin/cargo build-sbf --sbf-out-dir=../target/deploy
+	@cd programs/rps && rm -f Cargo.lock && ~/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools/rust/bin/cargo build-sbf --sbf-out-dir=../../target/deploy
 
 # Build frontend for production
 build-frontend:
@@ -75,7 +75,7 @@ clean: clean-program clean-frontend
 # Clean Rust build artifacts
 clean-program:
 	@echo "🧹 Cleaning Rust build artifacts..."
-	@cd program && cargo clean
+	@cd programs/rps && cargo clean
 	@rm -rf target
 
 # Clean frontend build artifacts
@@ -90,7 +90,7 @@ lint: lint-program lint-frontend
 # Lint Rust code with clippy
 lint-program:
 	@echo "🦀 Running Rust clippy..."
-	@cd program && cargo clippy --all-targets -- -W clippy::all
+	@cd programs/rps && cargo clippy --all-targets -- -W clippy::all
 
 # Lint frontend code
 lint-frontend:
@@ -106,5 +106,5 @@ coverage-program:
 	@echo "🦀 Running Rust test coverage..."
 	@echo "📦 Installing cargo-llvm-cov if needed..."
 	@cargo llvm-cov --version > /dev/null 2>&1 || cargo install cargo-llvm-cov
-	@cd program && cargo llvm-cov --html
-	@echo "📊 Coverage report: program/target/llvm-cov/html/index.html"
+	@cd programs/rps && cargo llvm-cov --html
+	@echo "📊 Coverage report: programs/rps/target/llvm-cov/html/index.html"
