@@ -317,6 +317,14 @@ export const GreatBanyanGame: React.FC = () => {
             const [leftPda] = findChildBudPda(selectedBudAddress, 'left');
             const [rightPda] = findChildBudPda(selectedBudAddress, 'right');
 
+            console.log("Bloom Debug:");
+            console.log("Tree PDA:", treePda.toString());
+            console.log("Selected Bud:", selectedBudAddress.toString());
+            console.log("Left Child PDA:", leftPda.toString());
+            console.log("Right Child PDA:", rightPda.toString());
+            console.log("Manager PDA:", managerPda.toString());
+            console.log("Program ID:", PROGRAM_ID.toString());
+
             const tx = new Transaction().add({
                 keys: [
                     { pubkey: publicKey, isSigner: true, isWritable: true },

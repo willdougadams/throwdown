@@ -112,4 +112,8 @@ coverage-program:
 init-banyan:
 	@echo "🌱 Initializing Banyan..."
 	@cd frontend && yarn install && yarn init-banyan
+
+bot:
+	@echo "🤖 Starting Banyan Bot..."
+	@cd frontend && npx tsx scripts/banyan-bot.ts
 	

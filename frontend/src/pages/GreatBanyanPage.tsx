@@ -5,7 +5,7 @@ import { theme } from '../theme';
 
 const GreatBanyanPage: React.FC = () => {
     return (
-        <Layout>
+        <Layout forceMobileLayout={true}>
             <div style={{ height: 'calc(100vh - 150px)', display: 'flex', flexDirection: 'column' }}>
                 <h1 style={{ color: theme.colors.text.primary, margin: '0 0 1rem 0' }}>The Great Banyan</h1>
                 <div style={{ flex: 1, minHeight: 0 }}>

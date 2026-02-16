@@ -1,0 +1,107 @@
+/* Tree Visualizer Styles */
+
+.tree-visualizer-container {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    background-color: transparent;
+    border-radius: var(--radius-lg, 0.75rem);
+    overflow: hidden;
+    border: 1px solid var(--color-border, #e2e8f0);
+    position: relative;
+}
+
+.tree-loading-overlay {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    z-index: 100;
+}
+
+/* SVG Links - Deprecated/Removed in recursive update */
+/* 
+.tree-links-svg {
+    pointer-events: none;
+    overflow: visible;
+}
+
+.tree-link {
+    fill: none;
+    stroke: #8B5A2B;
+    stroke-linecap: round;
+    transition: stroke-width 0.3s ease;
+} 
+*/
+
+/* Nodes */
+.tree-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    transform-origin: center center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    font-weight: bold;
+    font-size: 0.8rem;
+    transition: all 0.3s ease;
+}
+
+.tree-node:hover {
+    transform: translate(-50%, -50%) scale(1.2) rotate(45deg);
+    /* Default rotation on hover, overridden by specific types */
+    z-index: 20;
+}
+
+/* Node Types */
+.node-fruit {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: #FFD700;
+    /* Gold */
+    border: 3px solid #FF4500;
+    /* OrangeRed */
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+    color: black;
+}
+
+.node-bloomed {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    /* Knot */
+    background-color: #5D4037;
+    /* Dark Wood */
+    /* border: none; handled by default or reset */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    color: white;
+    rotate: 0deg;
+}
+
+.node-bloomed:hover {
+    transform: translate(-50%, -50%) scale(1.2) rotate(0deg);
+}
+
+.node-leaf {
+    width: 40px;
+    height: 40px;
+    border-radius: 0 50% 50% 50%;
+    /* Teardrop */
+    background-color: #6B8E23;
+    /* OliveDrab */
+    border: 2px solid var(--color-success, #22c55e);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    color: white;
+    rotate: 45deg;
+}
+
+.node-leaf:hover {
+    transform: translate(-50%, -50%) scale(1.2) rotate(45deg);
+}

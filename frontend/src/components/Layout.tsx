@@ -5,16 +5,17 @@ import { Menu, X } from 'lucide-react';
 
 interface LayoutProps {
     children: React.ReactNode;
+    forceMobileLayout?: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC<LayoutProps> = ({ children, forceMobileLayout = false }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [isMobile, setIsMobile] = useState(false);
+    const [isMobileState, setIsMobileState] = useState(false);
 
     useEffect(() => {
         const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768);
-            if (window.innerWidth >= 768) {
+            setIsMobileState(window.innerWidth < 768);
+            if (window.innerWidth >= 768 && !forceMobileLayout) {
                 setIsSidebarOpen(false); // Close sidebar when switching to desktop
             }
         };
@@ -22,19 +23,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         checkMobile();
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
-    }, []);
+    }, [forceMobileLayout]);
+
+    const isLayoutMobile = isMobileState || forceMobileLayout;
 
     return (
         <div style={{ display: 'flex', minHeight: '100vh' }}>
             {/* Sidebar */}
             <Sidebar
-                isOpen={isMobile ? isSidebarOpen : true}
+                // If forced mobile layout, respect sidebar open state. 
+                // Otherwise if generic desktop, sidebar is always open (true).
+                // Actually Sidebar handles its own 'isOpen' prop logic? 
+                // Let's see Sidebar: isOpen, isMobile.
+                // Sidebar uses 'isMobile' to decide if it renders as fixed overlay or just fixed column.
+                // If we pass isMobile={true} to Sidebar, it acts as overlay.
+                isOpen={isLayoutMobile ? isSidebarOpen : true}
                 onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-                isMobile={isMobile}
+                isMobile={isLayoutMobile}
             />
 
             {/* Mobile overlay */}
-            {isMobile && isSidebarOpen && (
+            {isLayoutMobile && isSidebarOpen && (
                 <div
                     onClick={() => setIsSidebarOpen(false)}
                     style={{
@@ -52,13 +61,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Main Content */}
             <div style={{
                 flex: 1,
-                marginLeft: isMobile ? 0 : '240px',
+                marginLeft: isLayoutMobile ? 0 : '240px',
                 minHeight: '100vh',
                 backgroundColor: theme.colors.sidebar,
-                width: '100%'
+                width: '100%',
+                maxWidth: '100vw', // Ensure it doesn't exceed viewport
+                overflowX: 'hidden' // Prevent horizontal scroll
             }}>
                 {/* Mobile menu button */}
-                {isMobile && (
+                {isLayoutMobile && (
                     <button
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                         style={{
@@ -83,7 +94,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 )}
 
                 {/* Page Content */}
-                <div style={{ padding: '1rem', paddingTop: isMobile ? '4rem' : '1rem' }}>
+                <div style={{ padding: '1rem', paddingTop: isLayoutMobile ? '4rem' : '1rem' }}>
                     {children}
                 </div>
             </div>
