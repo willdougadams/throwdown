@@ -1,6 +1,6 @@
 # Deploying to Vercel
 
-This guide will help you deploy the Throwdown app to Vercel so you can access it from your Solana Saga phone.
+This guide will help you deploy the Skrim app to Vercel so you can access it from your Solana Saga phone.
 
 ## Prerequisites
 

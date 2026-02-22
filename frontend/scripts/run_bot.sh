@@ -1,7 +1,7 @@
 #!/bin/bash
 # Wrapper script to run the bot in WSL
 echo "🚀 Starting Banyan Bot wrapper..."
-cd /home/will/throwdown/frontend
+cd /home/will/skrim/frontend
 
 # Check if node is available
 if ! command -v node &> /dev/null; then

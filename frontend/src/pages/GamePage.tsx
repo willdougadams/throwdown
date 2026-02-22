@@ -409,7 +409,7 @@ export default function GamePage() {
           Retry
         </button>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/rps-lobby')}
           style={{
             padding: '0.5rem 1rem',
             backgroundColor: theme.colors.text.disabled,
@@ -419,7 +419,7 @@ export default function GamePage() {
             cursor: 'pointer'
           }}
         >
-          Back to Home
+          Back to Lobby
         </button>
       </div>
     );
@@ -430,7 +430,7 @@ export default function GamePage() {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         <h2 style={{ color: theme.colors.text.primary }}>Game Not Found</h2>
-        <button onClick={() => navigate('/')}>Back to Home</button>
+        <button onClick={() => navigate('/rps-lobby')}>Back to Lobby</button>
       </div>
     );
   }

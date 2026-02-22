@@ -1,6 +1,7 @@
 import { Connection, Keypair, PublicKey, Transaction, SystemProgram, sendAndConfirmTransaction } from '@solana/web3.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { GAME_RULES } from '../src/config/gameRules';
 
 // Load Program ID
 // Use the main program-ids.json which is more reliable
@@ -128,8 +129,8 @@ async function main() {
     // [1..9] = Fruit Frequency (u64)
     // [9..17] = Vitality Required Base (u64)
 
-    const fruitFreq = 10n; // 1 in 10 chance
-    const vitalityReq = 100n; // u64
+    const fruitFreq = GAME_RULES.FRUIT_FREQUENCY;
+    const vitalityReq = GAME_RULES.VITALITY_REQUIRED_BASE;
 
     const data = Buffer.alloc(1 + 8 + 8);
     let offset = 0;

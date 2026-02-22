@@ -3,6 +3,7 @@ import { keccak_256 } from 'js-sha3';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import { theme } from '../../theme';
+import { GAME_RULES } from '../../config/gameRules';
 import { TreeVisualizer } from './TreeVisualizer';
 import { BudModal } from './BudModal';
 import {
@@ -382,8 +383,8 @@ export const GreatBanyanGame: React.FC = () => {
         setIsProcessing(true);
         try {
             // InitializeTree: Variant 1
-            const fruitFreq = 10n;
-            const vitalityReq = 100n;
+            const fruitFreq = GAME_RULES.FRUIT_FREQUENCY;
+            const vitalityReq = GAME_RULES.VITALITY_REQUIRED_BASE;
 
             const data = new Uint8Array(1 + 8 + 8);
             const view = new DataView(data.buffer);

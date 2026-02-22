@@ -1,6 +1,6 @@
 {
-  "name": "Throwdown",
-  "short_name": "Throwdown",
+  "name": "Skrim",
+  "short_name": "Skrim",
   "description": "Rock-Paper-Scissors tournament battles on Solana blockchain",
   "start_url": "/",
   "display": "standalone",
@@ -27,14 +27,22 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["games", "entertainment"],
+  "categories": [
+    "games",
+    "entertainment"
+  ],
   "shortcuts": [
     {
       "name": "Browse Games",
       "short_name": "Games",
       "description": "View available tournaments",
       "url": "/",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

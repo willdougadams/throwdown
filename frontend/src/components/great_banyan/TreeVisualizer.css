@@ -11,6 +11,12 @@
     position: relative;
 }
 
+.tree-world-viewport {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+}
+
 .tree-loading-overlay {
     position: absolute;
     top: 20px;

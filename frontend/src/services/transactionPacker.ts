@@ -1,7 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 
 /**
- * Transaction Packer for Throwdown RPS Game
+ * Transaction Packer for Skrim RPS Game
  *
  * Matches the new bytemuck-based Rust program structure with:
  * - Manual instruction packing (no Borsh)

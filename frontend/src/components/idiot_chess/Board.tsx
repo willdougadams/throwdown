@@ -331,7 +331,7 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove }) => {
         >
             <div style={{
                 width: '100%',
-                height: '100%',
+                // height: '100%',
                 aspectRatio: '1 / 1',
                 border: `4px solid ${theme.colors.border}`,
                 borderRadius: '4px',

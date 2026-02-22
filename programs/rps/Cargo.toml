@@ -1,10 +1,10 @@
 [package]
-name = "throwdown-token-program"
+name = "skrim-token-program"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "throwdown_token_program"
+name = "skrim_token_program"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]

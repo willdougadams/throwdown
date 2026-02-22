@@ -7,6 +7,7 @@ import { GamesProvider } from './contexts/GamesContext';
 import { NetworkProvider } from './contexts/NetworkContext';
 import Layout from './components/Layout';
 import LandingPage from './pages/LandingPage';
+import RPSLobbyPage from './pages/RPSLobbyPage';
 import GamePage from './pages/GamePage';
 import IdiotChessPage from './pages/IdiotChessPage';
 import GreatBanyanPage from './pages/GreatBanyanPage';
@@ -22,6 +23,7 @@ function App() {
                                 <Layout>
                                     <Routes>
                                         <Route path="/" element={<LandingPage />} />
+                                        <Route path="/rps-lobby" element={<RPSLobbyPage />} />
                                         <Route path="/game/:gameId" element={<GamePage />} />
                                         <Route path="/idiot-chess" element={<IdiotChessPage />} />
                                         <Route path="/great-banyan" element={<GreatBanyanPage />} />

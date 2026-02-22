@@ -2,6 +2,7 @@ import { Connection, Keypair, PublicKey, Transaction, SystemProgram, sendAndConf
 import * as fs from 'fs';
 import * as path from 'path';
 import { keccak_256 } from 'js-sha3';
+import { GAME_RULES } from '../src/config/gameRules';
 
 // --- Configuration ---
 const RPC_URL = "http://127.0.0.1:8899";
@@ -140,8 +141,8 @@ async function main() {
 
     async function actionInitializeTree(epoch: bigint) {
         console.log(`🌱 Initializing Tree for epoch ${epoch}...`);
-        const fruitFreq = 10n;
-        const vitalityReqBase = 100n;
+        const fruitFreq = GAME_RULES.FRUIT_FREQUENCY;
+        const vitalityReqBase = GAME_RULES.VITALITY_REQUIRED_BASE;
 
         const [treePda] = findTreePda(epoch);
         const [rootBudPda] = findBudPda(treePda, 'root');

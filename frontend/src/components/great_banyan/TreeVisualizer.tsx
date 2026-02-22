@@ -150,7 +150,6 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
         initialY: 0,
         minScale: 0.1,
         maxScale: 5,
-        worldBounds: { minX: -2500, maxX: 2500, maxY: 100 }
     });
 
     // Animation Loop for Wind
@@ -173,7 +172,7 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
                 setCamera(prev => ({
                     ...prev,
                     x: clientWidth / 2,
-                    y: clientHeight - 100
+                    y: clientHeight - 120
                 }));
             }
         }
@@ -392,18 +391,13 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
 
     }, [rootBudAddress, buds]);
 
-    // Parallax
-    const centerX = containerSize.width / 2;
-    const centerY = containerSize.height / 2;
-    const sandX = (camera.x - centerX) * 0.1;
-
     const handleRecenter = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (containerRef.current) {
             const { clientWidth, clientHeight } = containerRef.current;
             setCamera({
                 x: clientWidth / 2,
-                y: clientHeight - 100,
+                y: clientHeight - 120,
                 scale: 0.8
             });
         }
@@ -423,42 +417,20 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
             ref={containerRef}
             className="tree-visualizer-container"
             onMouseDown={handleMouseDown}
-            style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', cursor: 'grab' }}
         >
-            <div style={{ position: 'absolute', inset: 0, zIndex: 0, transform: `translate3d(${(camera.x - centerX) * 0.01}px, ${(camera.y - centerY) * 0.01}px, 0)` }}>
-                <SkyLayer />
-            </div>
-            <div style={{ position: 'absolute', inset: 0, zIndex: 1, transform: `translate3d(${(camera.x - centerX) * 0.05}px, ${(camera.y - centerY) * 0.05}px, 0)` }}>
-                <OceanLayer />
-            </div>
-            <div style={{ position: 'absolute', bottom: 0, left: '-10%', width: '120%', height: '180px', zIndex: 1, transform: `translate3d(${sandX}px, 0, 0)`, pointerEvents: 'none' }}>
-                <SandLayer />
-            </div>
-
             <div
                 className="tree-world-viewport"
                 style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    zIndex: 2,
-                    transformOrigin: '0 0',
-                    transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})`
+                    transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})`,
+                    transformOrigin: '0 0'
                 }}
             >
-                {/* 
-                    TREE ROOT 
-                    We position the Root Node at (0,0) of this world space.
-                    Since we use recursive transforms, everything flows from here.
-                */}
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: 0, height: 0
-                }}>
+                {/* Background is now part of the world! */}
+                <SkyLayer />
+                <OceanLayer />
+                <SandLayer />
+
+                <div style={{ position: 'absolute', top: 0, left: 0, width: 0, height: 0 }}>
                     {treeRoot && (
                         <>
                             {/* Render Root Node Visual */}
@@ -468,7 +440,6 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
                                     position: 'absolute',
                                     left: 0,
                                     top: 0,
-                                    // transform handled by CSS class .tree-node
                                     zIndex: 10,
                                 }}
                                 onClick={(e) => {
@@ -479,12 +450,7 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
                             />
 
                             {/* Render Children (Branches) */}
-                            {/* Initial orientation is 0 (Right). Children have relative angles calculated against 0. */}
-                            <div style={{
-                                position: 'absolute',
-                                top: 0, left: 0,
-                                // transform: 'rotate(0deg)' // Default
-                            }}>
+                            <div style={{ position: 'absolute', top: 0, left: 0 }}>
                                 {treeRoot.left && <RecursiveBranch node={treeRoot.left} onSelect={onBudSelect} time={time} currentWind={currentWind} />}
                                 {treeRoot.right && <RecursiveBranch node={treeRoot.right} onSelect={onBudSelect} time={time} currentWind={currentWind} />}
                             </div>
@@ -493,7 +459,7 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
                 </div>
             </div>
 
-            <div style={{ position: 'absolute', bottom: 10, right: 10, display: 'flex', alignItems: 'center', gap: '12px', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', pointerEvents: 'none', zIndex: 10 }}>
+            <div style={{ position: 'absolute', bottom: 10, right: 10, display: 'flex', alignItems: 'center', gap: '12px', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', pointerEvents: 'none', zIndex: 100 }}>
                 <span>Pan: Drag • Zoom: Scroll</span>
                 <button
                     onClick={handleRecenter}

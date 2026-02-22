@@ -11,8 +11,8 @@ action "setup_banyan" "svm::setup_surfnet" {
     # Deploy the RPS (Rock Paper Scissors) program
     deploy_program {
         program_id = "3tPcsGuXqWL6n3dgWMUEqMmRhChghjindpHp9LbGbbU5"
-        binary_path = "./programs/rps/target/deploy/throwdown_token_program.so"
-        authority = "programs/rps/target/deploy/throwdown_token_program-keypair.json"
+        binary_path = "./programs/rps/target/deploy/skrim_token_program.so"
+        authority = "programs/rps/target/deploy/skrim_token_program-keypair.json"
     }
 
     # Airdrop some SOL to the user's test wallet (if they have one configured in Solana CLI)

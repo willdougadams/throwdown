@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Throwdown',
-        short_name: 'Throwdown',
+        name: 'Skrim',
+        short_name: 'Skrim',
         description: 'Rock-Paper-Scissors tournament battles on Solana blockchain',
         theme_color: '#9945ff',
         background_color: '#0f0f1a',

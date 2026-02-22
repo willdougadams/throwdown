@@ -4,7 +4,7 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useNavigate } from 'react-router-dom';
 import ThemeSelector from './ThemeSelector';
 import NetworkSelector from './NetworkSelector';
-import { Gamepad2, Home, Wallet } from 'lucide-react';
+import { Gamepad2, Home, Wallet, Swords, Grip, Trees } from 'lucide-react';
 import { theme } from '../theme';
 
 interface SidebarProps {
@@ -42,6 +42,45 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
         return null;
     }
 
+    const NavButton = ({ onClick, icon: Icon, label, active = false }: { onClick: () => void, icon: any, label: string, active?: boolean }) => (
+        <button
+            onClick={onClick}
+            style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                marginBottom: '0.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                fontSize: '0.9rem',
+                border: 'none',
+                backgroundColor: active ? theme.colors.primary.main : 'transparent',
+                color: active ? 'white' : theme.colors.text.secondary,
+                transition: 'all 0.2s',
+                textAlign: 'left'
+            }}
+            onMouseEnter={(e) => {
+                if (!active) {
+                    e.currentTarget.style.backgroundColor = `${theme.colors.primary.main}15`;
+                    e.currentTarget.style.color = theme.colors.text.primary;
+                }
+            }}
+            onMouseLeave={(e) => {
+                if (!active) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = theme.colors.text.secondary;
+                }
+            }}
+        >
+            <Icon size={18} />
+            <span style={{ fontWeight: active ? '600' : '400' }}>{label}</span>
+        </button>
+    );
+
+    const currentPath = window.location.pathname;
+
     return (
         <div style={{
             position: 'fixed',
@@ -61,62 +100,75 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
         }}>
             {/* Header */}
             <div style={{
-                marginBottom: '0.75rem',
-                paddingBottom: '0.75rem',
-                borderBottom: `1px solid ${theme.colors.border}`,
+                marginBottom: '1rem',
+                padding: '0.5rem',
                 textAlign: 'center'
             }}>
-                <h2 style={{ margin: 0, fontSize: theme.fontSize.md, color: theme.colors.text.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.xs }}>
-                    <Gamepad2 size={18} /> Throwdown
+                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800', color: theme.colors.text.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.xs }}>
+                    <Gamepad2 size={24} color={theme.colors.primary.main} /> Skrim
                 </h2>
             </div>
 
             {/* Wallet Section */}
             <div style={{
-                marginBottom: '0.75rem',
-                padding: '0.75rem',
+                marginBottom: '1.5rem',
+                padding: '1rem',
                 backgroundColor: theme.colors.card,
-                borderRadius: '6px',
+                borderRadius: '12px',
                 border: `1px solid ${theme.colors.border}`
             }}>
-                <WalletMultiButton style={{ width: '100%', fontSize: '0.85rem' }} />
+                <WalletMultiButton style={{ width: '100%', fontSize: '0.85rem', height: '40px', lineHeight: '40px' }} />
 
                 {publicKey && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: theme.colors.text.secondary, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <Wallet size={12} />
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: theme.colors.text.secondary, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+                        <Wallet size={14} />
                         <strong>{balance !== null ? balance.toFixed(2) : '...'} SOL</strong>
                     </div>
                 )}
             </div>
 
             {/* Navigation */}
-            <button
-                onClick={() => navigate('/')}
-                className="primary"
-                style={{
-                    width: '100%',
-                    padding: '0.6rem',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    marginBottom: '0.75rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                    fontSize: '0.9rem'
-                }}
-            >
-                <Home size={16} /> Lobby
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <NavButton
+                    onClick={() => navigate('/')}
+                    icon={Home}
+                    label="Home"
+                    active={currentPath === '/'}
+                />
+                <NavButton
+                    onClick={() => navigate('/rps-lobby')}
+                    icon={Swords}
+                    label="Rock Paper Scissors"
+                    active={currentPath === '/rps-lobby' || currentPath.startsWith('/game/')}
+                />
+                <NavButton
+                    onClick={() => navigate('/idiot-chess')}
+                    icon={Grip}
+                    label="Idiot Chess"
+                    active={currentPath === '/idiot-chess'}
+                />
+                <NavButton
+                    onClick={() => navigate('/great-banyan')}
+                    icon={Trees}
+                    label="Great Banyan"
+                    active={currentPath === '/great-banyan'}
+                />
+            </div>
 
             {/* Spacer */}
             <div style={{ flex: 1 }}></div>
 
-            {/* Network Selector */}
-            <NetworkSelector />
-
-            {/* Theme Selector */}
-            <ThemeSelector />
+            {/* Bottom Controls */}
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem',
+                paddingTop: '1rem',
+                borderTop: `1px solid ${theme.colors.border}`
+            }}>
+                <NetworkSelector />
+                <ThemeSelector />
+            </div>
         </div>
     );
 };

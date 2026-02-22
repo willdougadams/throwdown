@@ -2,7 +2,7 @@
 
 # Default target
 help:
-	@echo "🎮 Throwdown - Available Commands"
+	@echo "🎮 Skrim - Available Commands"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test              Run all tests (program + frontend)"

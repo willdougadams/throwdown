@@ -1,4 +1,4 @@
-# Throwdown - Rock Paper Scissors Tournament
+# Skrim - Rock Paper Scissors Tournament
 
 A Solana blockchain tournament system featuring bracket-based Rock Paper Scissors competitions with SOL buy-ins and winner-takes-all payouts.
 
@@ -23,7 +23,7 @@ This project demonstrates advanced Solana program development using Pinocchio, a
 ## Project Structure
 
 ```
-throwdown/
+Skrim/
 ├── program/               # Solana program source
 │   ├── src/
 │   │   └── lib.rs        # Main program logic
@@ -44,7 +44,7 @@ throwdown/
 ### 1. Clone and Setup
 
 ```bash
-cd throwdown
+cd skrim
 ```
 
 ### 2. Build the Program
@@ -186,7 +186,7 @@ For local development, you can use a local validator:
 solana-test-validator
 
 # Deploy to local
-solana program deploy target/deploy/throwdown_token_program.so --url localhost
+solana program deploy target/deploy/skrim_token_program.so --url localhost
 ```
 
 ## Configuration

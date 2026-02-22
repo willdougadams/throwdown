@@ -16,8 +16,9 @@ export interface Piece {
 export interface GameState {
   board: (Piece | null)[][]; // 5x5 grid
   turn: Player;
-  winner: Player | null;
-  history: string[]; // For debugging mainly
+  winner: Player | 'draw' | null;
+  history: string[];
+  moveCount: number;
 }
 
 export const BOARD_SIZE = 5;
@@ -56,12 +57,11 @@ export class IdiotChessEngine {
       this.state = JSON.parse(JSON.stringify(initialState));
     } else {
       this.state = {
-        // Deep copy needed to ensure unique objects if we restarted (though IDs are hardcoded for initial board)
-        // Ideally we should regenerate IDs on reset, but hardcoded is fine for initial setup as long as they are unique.
         board: JSON.parse(JSON.stringify(INITIAL_BOARD)),
         turn: 'white',
         winner: null,
         history: [],
+        moveCount: 0
       };
     }
   }
@@ -155,10 +155,18 @@ export class IdiotChessEngine {
       if (opponentPieces === 1) { // Only King remaining
         this.spawnLastStandPawn(opponent);
       }
+      this.state.moveCount = 0; // Reset move count on capture
+    } else {
+      this.state.moveCount++; // Increment move count for draw detection
     }
 
     // Check Win Conditions
     this.checkWinCondition();
+
+    // Check for draw (e.g., 15 moves without capture)
+    if (!this.state.winner && this.state.moveCount >= 15) {
+      this.state.winner = 'draw';
+    }
 
     // Switch turn if no winner
     if (!this.state.winner) {
@@ -183,24 +191,6 @@ export class IdiotChessEngine {
       this.state.winner = 'white';
       return;
     }
-
-    // 2. King reaches opponent's starting square - WIN CONDITION REMOVED
-    /*
-    const goalWhite = { x: 2, y: 4 };
-    const goalBlack = { x: 2, y: 0 };
-
-    const pieceAtWhiteGoal = this.getPiece(goalWhite);
-    if (pieceAtWhiteGoal && pieceAtWhiteGoal.player === 'white' && pieceAtWhiteGoal.type === 'king') {
-      this.state.winner = 'white';
-      return;
-    }
-
-    const pieceAtBlackGoal = this.getPiece(goalBlack);
-    if (pieceAtBlackGoal && pieceAtBlackGoal.player === 'black' && pieceAtBlackGoal.type === 'king') {
-      this.state.winner = 'black';
-      return;
-    }
-    */
   }
 
   private countKings(player: Player): number {

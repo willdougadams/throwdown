@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "name": "throwdown_token_program",
+  "name": "skrim_token_program",
   "instructions": [
     {
       "name": "CreateGame",

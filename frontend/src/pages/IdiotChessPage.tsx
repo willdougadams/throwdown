@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IdiotChessEngine } from '../components/idiot_chess/GameEngine';
 import Board from '../components/idiot_chess/Board';
+import GameOverOverlay from '../components/idiot_chess/GameOverOverlay';
+import GameInfo from '../components/idiot_chess/GameInfo';
 
 import { theme } from '../theme';
 
@@ -15,6 +17,11 @@ const IdiotChessPage: React.FC = () => {
     const handleMove = () => {
         // Engine state is mutated internally, trigger re-render with new state copy
         setGameState({ ...engineRef.current.getState() });
+    };
+
+    const handleReset = () => {
+        engineRef.current = new IdiotChessEngine();
+        setGameState(engineRef.current.getState());
     };
 
     // Computer Player Logic
@@ -33,31 +40,67 @@ const IdiotChessPage: React.FC = () => {
 
 
     return (
-        <div className="idiot-chess-page">
-            <div className="idiot-chess-header">
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1rem', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                marginBottom: '1.5rem',
+                flexShrink: 0
+            }}>
                 <button
                     onClick={() => navigate('/')}
                     style={{
-                        background: 'none',
-                        border: 'none',
-                        color: theme.colors.text.secondary,
+                        padding: '0.5rem 1rem',
+                        backgroundColor: theme.colors.surface,
+                        border: `1px solid ${theme.colors.border}`,
+                        color: theme.colors.text.primary,
+                        borderRadius: '8px',
                         cursor: 'pointer',
-                        fontSize: theme.fontSize.lg,
-                        display: 'flex',
-                        alignItems: 'center',
-                        marginRight: '1rem'
+                        fontWeight: 'bold'
                     }}
                 >
-                    ← Back
+                    ← Home
                 </button>
                 <h1 style={{ margin: 0, color: theme.colors.text.primary }}>Idiot Chess</h1>
             </div>
-            <div className="idiot-chess-board-container">
-                <Board
-                    engine={engineRef.current}
-                    state={gameState}
-                    onMove={handleMove}
-                />
+
+            <div style={{
+                display: 'flex',
+                flexDirection: window.innerWidth < 1000 ? 'column' : 'row',
+                gap: '2rem',
+                alignItems: 'stretch',
+                flex: 1
+            }}>
+                <div style={{ 
+                    position: 'relative', 
+                    flex: '1.5',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'flex-start',
+                    minWidth: 0 // Prevents flex item from overflowing
+                }}>
+                    <Board
+                        engine={engineRef.current}
+                        state={gameState}
+                        onMove={handleMove}
+                    />
+                    <GameOverOverlay
+                        winner={gameState.winner}
+                        onReset={handleReset}
+                    />
+                </div>
+
+                <div style={{ 
+                    flex: '1', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '1rem',
+                    minWidth: window.innerWidth < 1000 ? '100%' : '350px',
+                    maxWidth: window.innerWidth < 1000 ? '100%' : '450px'
+                }}>
+                    <GameInfo state={gameState} />
+                </div>
             </div>
         </div>
     );

@@ -1,56 +1,82 @@
-
 import React from 'react';
+import { GameState, BOARD_SIZE } from './GameEngine';
 import { theme } from '../../theme';
-import { Player } from './GameEngine';
+import { User, Cpu, Hash } from 'lucide-react';
 
 interface GameInfoProps {
-    turn: Player;
-    winner: Player | null;
-    onReset: () => void;
+    state: GameState;
 }
 
-const GameInfo: React.FC<GameInfoProps> = ({ turn, winner, onReset }) => {
+const GameInfo: React.FC<GameInfoProps> = ({ state }) => {
+    const isPlayerTurn = state.turn === 'white';
+    
     return (
         <div style={{
-            marginTop: '1rem',
-            padding: '1rem',
-            backgroundColor: theme.colors.surface,
-            borderRadius: theme.borderRadius.md,
-            boxShadow: theme.shadow.sm,
-            textAlign: 'center'
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            padding: '1.5rem',
+            backgroundColor: theme.colors.card,
+            borderRadius: '12px',
+            border: `1px solid ${theme.colors.border}`,
+            width: '100%',
+            maxWidth: '400px'
         }}>
-            {winner ? (
-                <h2 style={{ color: theme.colors.primary.main, marginBottom: '1rem' }}>
-                    {winner === 'white' ? 'White' : 'Black'} Wins!
-                </h2>
-            ) : (
-                <h3 style={{ color: theme.colors.text.primary, marginBottom: '1rem' }}>
-                    Turn: <span style={{ fontWeight: 'bold' }}>{turn === 'white' ? 'White' : 'Black'}</span>
-                </h3>
-            )}
+            {/* Turn Indicator */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.75rem',
+                    color: isPlayerTurn ? theme.colors.primary.main : theme.colors.text.secondary,
+                    transition: 'all 0.3s'
+                }}>
+                    <User size={20} />
+                    <span style={{ fontWeight: isPlayerTurn ? 'bold' : 'normal' }}>Player (White)</span>
+                    {isPlayerTurn && <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: theme.colors.primary.main }} />}
+                </div>
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.75rem',
+                    color: !isPlayerTurn ? theme.colors.secondary.main : theme.colors.text.secondary,
+                    transition: 'all 0.3s'
+                }}>
+                    {!isPlayerTurn && <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: theme.colors.secondary.main }} />}
+                    <span style={{ fontWeight: !isPlayerTurn ? 'bold' : 'normal' }}>CPU (Black)</span>
+                    <Cpu size={20} />
+                </div>
+            </div>
 
-            <button
-                onClick={onReset}
-                style={{
-                    padding: '0.5rem 1rem',
-                    backgroundColor: theme.colors.primary.main,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: theme.borderRadius.sm,
-                    cursor: 'pointer',
-                    fontWeight: theme.fontWeight.medium,
-                    fontSize: theme.fontSize.sm,
-                    transition: 'background-color 0.2s',
-                }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = theme.colors.primary.hover || theme.colors.primary.main}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = theme.colors.primary.main}
-            >
-                {winner ? 'Play Again' : 'Reset Game'}
-            </button>
+            {/* Progress to Draw */}
+            <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: theme.colors.text.secondary, marginBottom: '0.4rem' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <Hash size={14} /> Moves since capture
+                    </span>
+                    <span>{state.moveCount} / 15</span>
+                </div>
+                <div style={{ width: '100%', height: '6px', backgroundColor: theme.colors.background, borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ 
+                        width: `${(state.moveCount / 15) * 100}%`, 
+                        height: '100%', 
+                        backgroundColor: state.moveCount > 10 ? theme.colors.error : theme.colors.text.secondary,
+                        transition: 'width 0.3s ease-out'
+                    }} />
+                </div>
+            </div>
 
-            <div style={{ marginTop: '1rem', fontSize: theme.fontSize.xs, color: theme.colors.text.secondary }}>
-                <p>White moves first. Pawns move forward, attack diagonally.</p>
-                <p>Win by capturing all enemy kings or reaching the enemy start rank with your King.</p>
+            {/* Rules Reminder */}
+            <div style={{ 
+                marginTop: '0.5rem', 
+                padding: '0.75rem', 
+                backgroundColor: theme.colors.background, 
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                color: theme.colors.text.secondary,
+                lineHeight: '1.4'
+            }}>
+                <strong>Winning:</strong> Capture all of the opponent's Kings! If 15 moves pass without a capture, the game ends in a stalemate.
             </div>
         </div>
     );
