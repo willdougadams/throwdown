@@ -1,6 +1,6 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getProgramId, getCurrentNetwork } from '../config/programIds';
-import { GameAccountDeserializer } from './transactionPacker';
+import { GameAccountDeserializer, WaitingAccountDeserializer } from './transactionPacker';
 
 interface GameIndexEntry {
     game_address: string;
@@ -107,6 +107,34 @@ export class GameService {
     }
 
     /**
+     * Fetch the Quickplay waitlist pool
+     */
+    async fetchWaitingPool(): Promise<Array<{ player: string, entry_fee: bigint, timestamp: number }>> {
+        try {
+            console.log('Fetching waiting pool...');
+            const accounts = await this.connection.getProgramAccounts(this.programId, {
+                commitment: 'confirmed'
+            });
+
+            const pool = [];
+            for (const { account } of accounts) {
+                try {
+                    const waitingData = WaitingAccountDeserializer.deserialize(account.data);
+                    if (waitingData) {
+                        pool.push(waitingData);
+                    }
+                } catch (e) {
+                    // Not a waiting account
+                }
+            }
+            return pool;
+        } catch (error) {
+            console.error('Error fetching waiting pool:', error);
+            return [];
+        }
+    }
+
+    /**
      * Fetch detailed game data for a specific game
      */
     async fetchGameDetails(gameAddress: string): Promise<any | null> {
@@ -155,7 +183,7 @@ export class GameService {
             name: game.name,
             description: game.description,
             status: this.mapGameStateToStatus(game.state),
-            players: new Array(game.current_players).fill(''), // Create array with correct length for display
+            players: new Array(game.current_players).fill(''),
             maxPlayers: game.max_players,
             createdAt: new Date(game.created_at * 1000).toISOString().split('T')[0],
             buyInSOL: GameAccountDeserializer.lamportsToSol(game.buy_in_lamports),

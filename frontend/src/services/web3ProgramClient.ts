@@ -10,7 +10,6 @@ import { getProgramId } from '../config/programIds';
 import { TransactionPacker as TransactionPacker, AccountSizeCalculator } from './transactionPacker';
 
 export interface CreateGameParams {
-  playerCount: number;
   entryFee: number; // in SOL
   gameName: string;
   description: string;
@@ -48,14 +47,12 @@ export class Web3ProgramClient {
     // Use TransactionPacker for serialization
     const buyInLamports = BigInt(Math.floor(params.entryFee * 1_000_000_000));
     const instructionData = TransactionPacker.packCreateGame(
-      params.playerCount,
       buyInLamports,
       params.gameName,
       params.description
     );
 
     console.log('CreateGame data:', {
-      max_players: params.playerCount,
       buy_in_lamports: buyInLamports.toString()
     });
     TransactionPacker.logInstruction('CreateGame', instructionData);
@@ -109,10 +106,10 @@ export class Web3ProgramClient {
 
       // Add signature for the created game account
       signedTransaction.partialSign(gameKeypair);
-      
+
       console.log('Sending transaction...');
       const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
-      
+
       console.log('Confirming transaction...');
       await this.connection.confirmTransaction(signature, 'confirmed');
 
@@ -139,9 +136,13 @@ export class Web3ProgramClient {
       throw new Error('Game account not found');
     }
 
-    // Read buy-in from game account data (offset 360, 8 bytes little-endian)
-    // New offset: 32 (creator) + 64 (name) + 256 (description) + 8 (other fields) = 360
-    const buyInLamports = accountInfo.data.readBigUInt64LE(360);
+    // Read buy-in from game account data (offset 368, 8 bytes little-endian)
+    // New offset: 32 (creator) + 64 (name) + 256 (description) + 6 (metadata) + 2 (padding) + 8 (timestamp) = 368
+    // Wait, recalculating based on lib.rs:
+    // creator(32) + name(64) + desc(256) + max_players(1) + current(1) + state(1) + padding(3) + timestamp(8) = 366.
+    // Let's use 368 to align with 8-byte boundary if needed, but in lib.rs it's:
+    // const OFFSET_BUY_IN: usize = 368;
+    const buyInLamports = accountInfo.data.readBigUInt64LE(368);
     console.log('Buy-in amount:', buyInLamports.toString(), 'lamports');
     console.log('Joining as player slot:', playerSlot);
 
@@ -328,6 +329,170 @@ export class Web3ProgramClient {
     }
   }
 
+  async getWaitingAccountAddress(player: PublicKey): Promise<PublicKey> {
+    const [address] = await PublicKey.findProgramAddress(
+      [Buffer.from('waiting'), player.toBuffer()],
+      this.programId
+    );
+    return address;
+  }
+
+  async joinPool(entryFee: number): Promise<string> {
+    if (!this.wallet.publicKey || !this.wallet.signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    const waitingAccount = await this.getWaitingAccountAddress(this.wallet.publicKey);
+    const entryFeeLamports = BigInt(Math.floor(entryFee * 1_000_000_000));
+    const instructionData = TransactionPacker.packJoinPool(entryFeeLamports);
+
+    // Calculate rent for WaitingAccount (48 bytes)
+    const space = 48;
+    const rent = await this.connection.getMinimumBalanceForRentExemption(space);
+
+    const transaction = new Transaction();
+
+    // 1. Send rent + entry fee to the PDA address
+    // The program will detect if it needs to initialize data.
+    // NOTE: On Solana, we can't "send" to an address that doesn't exist and have it belong to a program
+    // unless we create it. But we can't sign for the PDA here without the program.
+    // Actually, for simple data initialization, we can just create the account here 
+    // but the previous error was that the program failed to WRITE to it if it already existed?
+    // Wait, the user said: "it fails because the player was never properly added to the pool"
+    // and "leave fails because the player was never properly added to the pool".
+    // If JoinPool didn't require a signature, it wouldn't be able to initialize the account if it's a PDA.
+
+    // RE-EVALUATING: The PDA needs to be created.
+    transaction.add(
+      SystemProgram.createAccount({
+        fromPubkey: this.wallet.publicKey,
+        newAccountPubkey: waitingAccount,
+        lamports: Number(BigInt(rent) + entryFeeLamports),
+        space: space,
+        programId: this.programId,
+      })
+    );
+
+    // 2. Call JoinPool instruction to initialize data
+    transaction.add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+          { pubkey: waitingAccount, isSigner: false, isWritable: true },
+        ],
+        programId: this.programId,
+        data: Buffer.from(instructionData),
+      })
+    );
+
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = this.wallet.publicKey;
+
+    const signedTransaction = await this.wallet.signTransaction(transaction);
+    const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
+    await this.connection.confirmTransaction(signature, 'confirmed');
+
+    return signature;
+  }
+
+  async leavePool(): Promise<string> {
+    if (!this.wallet.publicKey || !this.wallet.signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    const waitingAccount = await this.getWaitingAccountAddress(this.wallet.publicKey);
+    const instructionData = TransactionPacker.packLeavePool();
+
+    const leavePoolInstruction = new TransactionInstruction({
+      keys: [
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: waitingAccount, isSigner: false, isWritable: true },
+      ],
+      programId: this.programId,
+      data: Buffer.from(instructionData),
+    });
+
+    const transaction = new Transaction().add(leavePoolInstruction);
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = this.wallet.publicKey;
+
+    const signedTransaction = await this.wallet.signTransaction(transaction);
+    const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
+    await this.connection.confirmTransaction(signature, 'confirmed');
+
+    return signature;
+  }
+
+  async matchPlayer(waitingPlayer: string, gameName: string): Promise<GameCreationResult> {
+    if (!this.wallet.publicKey || !this.wallet.signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    const waitingPlayerPubkey = new PublicKey(waitingPlayer);
+    const waitingAccount = await this.getWaitingAccountAddress(waitingPlayerPubkey);
+
+    // Fetch info to get entry fee
+    const accountInfo = await this.connection.getAccountInfo(waitingAccount);
+    if (!accountInfo) throw new Error('Waiting player not found');
+    // Offset in lib.rs for WaitingAccount is: player(32) + entry_fee(8) + timestamp(8) = 48 bytes
+    // So entry_fee is at offset 32
+    const entryFeeLamports = accountInfo.data.readBigUInt64LE(32);
+
+    const gameKeypair = Keypair.generate();
+    const gameAccount = gameKeypair.publicKey;
+    const gameSpace = AccountSizeCalculator.calculateGameAccountSize();
+    const gameRent = await this.connection.getMinimumBalanceForRentExemption(gameSpace);
+
+    const instructionData = TransactionPacker.packMatchPlayer(gameName);
+
+    const transaction = new Transaction();
+
+    // 1. Create game account
+    transaction.add(SystemProgram.createAccount({
+      fromPubkey: this.wallet.publicKey,
+      newAccountPubkey: gameAccount,
+      lamports: gameRent,
+      space: gameSpace,
+      programId: this.programId,
+    }));
+
+    // 2. Transfer matcher's entry fee
+    transaction.add(SystemProgram.transfer({
+      fromPubkey: this.wallet.publicKey,
+      toPubkey: gameAccount,
+      lamports: Number(entryFeeLamports),
+    }));
+
+    // 3. MatchPlayer instruction
+    transaction.add(new TransactionInstruction({
+      keys: [
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true }, // Creator/Matcher
+        { pubkey: gameAccount, isSigner: false, isWritable: true },
+        { pubkey: waitingAccount, isSigner: false, isWritable: true },
+        { pubkey: waitingPlayerPubkey, isSigner: false, isWritable: true }, // For rent refund
+      ],
+      programId: this.programId,
+      data: Buffer.from(instructionData),
+    }));
+
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = this.wallet.publicKey;
+
+    const signedTransaction = await this.wallet.signTransaction(transaction);
+    signedTransaction.partialSign(gameKeypair);
+
+    const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
+    await this.connection.confirmTransaction(signature, 'confirmed');
+
+    return {
+      gameId: gameAccount.toString(),
+      signature
+    };
+  }
+
   async getGameAccount(gameId: string) {
     try {
       const gameAccount = new PublicKey(gameId);
@@ -357,6 +522,6 @@ export function createWeb3ProgramClient(connection: Connection, wallet: any): We
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet must be connected and have signing capabilities');
   }
-  
+
   return new Web3ProgramClient(connection, wallet);
 }

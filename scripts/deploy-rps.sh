@@ -4,7 +4,7 @@
 
 set -e
 
-NETWORK=${1:-devnet}
+NETWORK=${1:-localnet}
 FORCE_NEW=${2:-false}
 
 echo "🚀 Deploying RPS Bracket Program to $NETWORK..."
@@ -34,7 +34,7 @@ solana balance
 
 # Build program
 echo "🔨 Building program..."
-./build.sh
+bash scripts/build-rps.sh
 
 # Get existing program ID
 EXISTING_ID=$(node scripts/program-id-manager.js get $NETWORK rps 2>/dev/null || echo "")
@@ -52,8 +52,12 @@ if [ "$NETWORK" != "localnet" ] && [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != 
     else
         # Try to upgrade existing program
         echo "🔄 Uploading program upgrade..."
-        DEPLOY_OUTPUT=$(solana program deploy programs/rps/target/deploy/pinocchio_token_program.so --program-id $EXISTING_ID 2>&1)
-        DEPLOY_EXIT_CODE=$?
+        # Wrap in a subshell or use || true to prevent set -e from exiting
+        DEPLOY_OUTPUT=$(solana program deploy programs/rps/target/deploy/rps.so --program-id $EXISTING_ID 2>&1) || DEPLOY_EXIT_CODE=$?
+        
+        # If the assignment succeeded without failure, DEPLOY_EXIT_CODE won't be set by the || 
+        # so we ensure it's captured correctly.
+        if [ -z "$DEPLOY_EXIT_CODE" ]; then DEPLOY_EXIT_CODE=0; fi
 
         if [ $DEPLOY_EXIT_CODE -eq 0 ] && echo "$DEPLOY_OUTPUT" | grep -q "Program Id:"; then
             echo "✅ Program upgraded successfully!"
@@ -74,22 +78,22 @@ fi
 
 # Deploy new program
 echo "📦 Deploying fresh program..."
-echo "📊 Program binary size: $(ls -lh programs/rps/target/deploy/pinocchio_token_program.so | awk '{print $5}')"
+echo "📊 Program binary size: $(ls -lh programs/rps/target/deploy/rps.so | awk '{print $5}')"
 
 if [ "$NETWORK" = "localnet" ]; then
     # For localnet, use simple deployment
     echo "🔄 Uploading to localnet..."
-    DEPLOY_OUTPUT=$(solana program deploy programs/rps/target/deploy/pinocchio_token_program.so 2>&1)
+    DEPLOY_OUTPUT=$(solana program deploy programs/rps/target/deploy/rps.so 2>&1)
     DEPLOY_EXIT_CODE=$?
 else
     # For devnet/mainnet, generate specific keypair to avoid buffer conflicts
-    KEYPAIR_FILE="programs/rps/target/deploy/pinocchio_token_program-keypair.json"
+    KEYPAIR_FILE="programs/rps/target/deploy/rps-keypair.json"
     if [ ! -f "$KEYPAIR_FILE" ]; then
         echo "🔑 Generating program keypair..."
         solana-keygen new -o $KEYPAIR_FILE --no-bip39-passphrase --silent
     fi
     echo "🔄 Uploading to $NETWORK..."
-    DEPLOY_OUTPUT=$(solana program deploy programs/rps/target/deploy/pinocchio_token_program.so --program-id $KEYPAIR_FILE --max-len 150000 2>&1)
+    DEPLOY_OUTPUT=$(solana program deploy programs/rps/target/deploy/rps.so --program-id $KEYPAIR_FILE --max-len 150000 2>&1)
     DEPLOY_EXIT_CODE=$?
 fi
 

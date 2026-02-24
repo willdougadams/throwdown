@@ -5,7 +5,7 @@ import { theme } from '../../theme';
 import { Player } from './GameEngine';
 
 interface GameOverOverlayProps {
-    winner: Player | null;
+    winner: Player | 'draw' | null;
     onReset: () => void;
 }
 

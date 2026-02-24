@@ -12,8 +12,8 @@ cargo build-sbf -- -Znext-lockfile-bump
 
 if [ $? -eq 0 ]; then
     echo "✅ Build successful!"
-    echo "📍 Binary location: programs/rps/target/deploy/skrim_token_program.so"
-    ls -lh target/deploy/skrim_token_program.so
+    echo "📍 Binary location: programs/rps/target/deploy/rps.so"
+    ls -lh target/deploy/rps.so
 else
     echo "❌ Build failed!"
     exit 1

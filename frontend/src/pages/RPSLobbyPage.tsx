@@ -1,145 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { createWeb3ProgramClient, CreateGameParams } from '../services/web3ProgramClient';
-import { GameList } from '../components';
-import { Swords, Plus, Grip } from 'lucide-react';
+import { createWeb3ProgramClient } from '../services/web3ProgramClient';
+import { GameService } from '../services/gameService';
+import { Swords, Grip, Timer, Users, Search } from 'lucide-react';
 import { theme } from '../theme';
 import { useToast } from '../contexts/ToastContext';
 import { useGames } from '../contexts/GamesContext';
 
 
-interface NewGameConfig {
-  playerCount: number;
-  entryFee: number;
-  gameName: string;
-  description: string;
-}
+// NewGameConfig removed
 
-function NewGameModal({ isOpen, onClose, onGameCreated }: {
+// NewGameModal removed
+function QuickplayModal({ isOpen, onClose, entryFee, status, onJoin, onLeave }: {
   isOpen: boolean;
   onClose: () => void;
-  onGameCreated?: (gameId: string) => void;
+  entryFee: number;
+  status: 'idle' | 'searching' | 'matched';
+  onJoin: () => void;
+  onLeave: () => void;
 }) {
-  const { connection } = useConnection();
-  const wallet = useWallet();
-  const { publicKey } = wallet;
-  const navigate = useNavigate();
-  const { showToast } = useToast();
-
-  const [config, setConfig] = useState<NewGameConfig>({
-    playerCount: 8,
-    entryFee: 0.1,
-    gameName: '',
-    description: ''
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<keyof NewGameConfig, string>>>({});
-
-  const validateForm = (): boolean => {
-    const newErrors: Partial<Record<keyof NewGameConfig, string>> = {};
-
-    if (!config.gameName.trim()) {
-      newErrors.gameName = 'Game name is required';
-    }
-
-    if (typeof config.entryFee !== 'number' || config.entryFee < 0) {
-      newErrors.entryFee = 'Entry fee cannot be negative';
-    }
-
-    if (typeof config.entryFee === 'number' && config.entryFee > 10) {
-      newErrors.entryFee = 'Entry fee cannot exceed 10 SOL';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!publicKey || !connection || !wallet.signTransaction) {
-      showToast('Please connect your wallet first', 'error');
-      return;
-    }
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      console.log('Creating game with config:', config);
-
-      const gameParams: CreateGameParams = {
-        playerCount: config.playerCount,
-        entryFee: config.entryFee,
-        gameName: config.gameName,
-        description: config.description
-      };
-
-      console.log('Creating Web3 program client...');
-      const client = createWeb3ProgramClient(connection, wallet);
-
-      console.log('Calling createGame function...');
-      const result = await client.createGame(gameParams);
-
-      console.log('Game created successfully:', result);
-
-      // Show success message with game details
-      showToast(
-        `Tournament "${config.gameName}" created successfully! Entry Fee: ${config.entryFee} SOL, Prize Pool: ${(config.entryFee * config.playerCount).toFixed(2)} SOL`,
-        'success',
-        4000
-      );
-
-      // Navigate to game page
-      navigate(`/game/${result.gameId}`);
-
-      // Notify parent component if callback provided
-      if (onGameCreated) {
-        onGameCreated(result.gameId);
-      }
-
-      onClose();
-
-      // Reset form
-      setConfig({
-        playerCount: 8,
-        entryFee: 0.1,
-        gameName: '',
-        description: ''
-      });
-    } catch (error) {
-      console.error('Failed to create game:', error);
-
-      let errorMessage = 'Failed to create tournament. ';
-      if (error instanceof Error) {
-        if (error.message.includes('User rejected')) {
-          errorMessage += 'Transaction was cancelled.';
-        } else if (error.message.includes('insufficient funds')) {
-          errorMessage += 'Insufficient SOL for transaction and entry fee.';
-        } else {
-          errorMessage += error.message;
-        }
-      } else {
-        errorMessage += 'Please try again.';
-      }
-
-      showToast(errorMessage, 'error', 5000);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleInputChange = (field: keyof NewGameConfig, value: string | number) => {
-    setConfig(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -149,237 +29,112 @@ function NewGameModal({ isOpen, onClose, onGameCreated }: {
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1000,
-      padding: '1rem'
+      padding: '1rem',
+      backdropFilter: 'blur(4px)'
     }}>
       <div style={{
         backgroundColor: theme.colors.surface,
-        padding: window.innerWidth < 768 ? '1.5rem' : '2rem',
-        borderRadius: '12px',
-        maxWidth: '500px',
+        padding: '2rem',
+        borderRadius: '16px',
+        maxWidth: '400px',
         width: '100%',
-        maxHeight: '90vh',
-        overflowY: 'auto',
-        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+        textAlign: 'center',
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
+        border: `1px solid ${theme.colors.border}`
       }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1.5rem'
-        }}>
-          <h2 style={{ margin: 0, color: theme.colors.text.primary, fontSize: window.innerWidth < 768 ? '1.2rem' : '1.5rem' }}>Create New Tournament</h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1.5rem',
-              cursor: 'pointer',
-              color: theme.colors.text.secondary,
-              padding: '0.25rem'
-            }}
-          >
-            ×
-          </button>
+        <div style={{ marginBottom: '1.5rem' }}>
+          {status === 'searching' ? (
+            <div style={{ position: 'relative', width: '80px', height: '80px', margin: '0 auto' }}>
+              <div className="searching-spinner" style={{
+                width: '100%',
+                height: '100%',
+                borderRadius: '50%',
+                border: `3px solid ${theme.colors.primary.main}`,
+                borderTopColor: 'transparent',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <Search size={32} color={theme.colors.primary.main} style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)'
+              }} />
+            </div>
+          ) : (
+            <Users size={48} color={theme.colors.primary.main} style={{ margin: '0 auto' }} />
+          )}
         </div>
 
-        <form onSubmit={handleSubmit}>
-          {/* Game Name */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontWeight: 'bold',
-              color: theme.colors.text.primary
-            }}>
-              Tournament Name *
-            </label>
-            <input
-              type="text"
-              value={config.gameName}
-              onChange={(e) => handleInputChange('gameName', e.target.value)}
-              placeholder="e.g., Friday Night Battles"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: `2px solid ${errors.gameName ? theme.colors.error : theme.colors.border}`,
-                borderRadius: '6px',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-                backgroundColor: theme.colors.background,
-                color: theme.colors.text.primary
-              }}
-            />
-            {errors.gameName && (
-              <div style={{ color: theme.colors.error, fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                {errors.gameName}
-              </div>
-            )}
-          </div>
+        <h2 style={{ color: theme.colors.text.primary, marginBottom: '0.5rem' }}>
+          {status === 'searching' ? 'Searching for Opponent...' : 'Quickplay Match'}
+        </h2>
 
-          {/* Description */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontWeight: 'bold',
-              color: theme.colors.text.primary
-            }}>
-              Description (Optional)
-            </label>
-            <textarea
-              value={config.description}
-              onChange={(e) => handleInputChange('description', e.target.value)}
-              placeholder="Tournament description or special rules..."
-              rows={3}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: `2px solid ${theme.colors.border}`,
-                borderRadius: '6px',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-                resize: 'vertical',
-                backgroundColor: theme.colors.background,
-                color: theme.colors.text.primary
-              }}
-            />
-          </div>
+        <p style={{ color: theme.colors.text.secondary, marginBottom: '2rem' }}>
+          {status === 'searching'
+            ? `Waiting for someone to match your ${entryFee} SOL entry fee.`
+            : `Instantly battle 1v1 for ${entryFee * 2} SOL prizes.`}
+        </p>
 
-          {/* Player Count */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontWeight: 'bold',
-              color: theme.colors.text.primary
-            }}>
-              Number of Players
-            </label>
-            <select
-              value={config.playerCount.toString()}
-              onChange={(e) => handleInputChange('playerCount', parseInt(e.target.value))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {status === 'idle' && (
+            <button
+              onClick={onJoin}
               style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: `2px solid ${theme.colors.border}`,
-                borderRadius: '6px',
-                fontSize: '1rem',
-                backgroundColor: theme.colors.background,
-                color: theme.colors.text.primary
+                padding: '1rem',
+                backgroundColor: theme.colors.primary.main,
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '1.1rem',
+                fontWeight: 'bold',
+                cursor: 'pointer'
               }}
             >
-              <option value={4}>4 Players (2 rounds)</option>
-              <option value={8}>8 Players (3 rounds)</option>
-              <option value={16}>16 Players (4 rounds)</option>
-              <option value={32}>32 Players (5 rounds)</option>
-            </select>
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginTop: '0.25rem' }}>
-              Tournament will have {Math.log2(config.playerCount)} rounds
-            </div>
-          </div>
+              Join Matchmaking
+            </button>
+          )}
 
-          {/* Entry Fee */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontWeight: 'bold',
-              color: theme.colors.text.primary
-            }}>
-              Entry Fee (SOL)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max="10"
-              value={config.entryFee.toString()}
-              onChange={(e) => handleInputChange('entryFee', parseFloat(e.target.value) || 0)}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: `2px solid ${errors.entryFee ? theme.colors.error : theme.colors.border}`,
-                borderRadius: '6px',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-                backgroundColor: theme.colors.background,
-                color: theme.colors.text.primary
-              }}
-            />
-            {errors.entryFee && (
-              <div style={{ color: theme.colors.error, fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                {errors.entryFee}
-              </div>
-            )}
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginTop: '0.25rem' }}>
-              Total prize pool: {(config.entryFee * config.playerCount).toFixed(2)} SOL
-            </div>
-          </div>
-
-          {/* Prize Distribution Info */}
-          <div style={{
-            backgroundColor: theme.colors.surface,
-            padding: '1rem',
-            borderRadius: '6px',
-            marginBottom: '1.5rem',
-            border: `1px solid ${theme.colors.border}`
-          }}>
-            <h4 style={{ margin: '0 0 0.5rem 0', color: theme.colors.text.primary }}>Prize Distribution</h4>
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
-              • Winner: {(config.entryFee * config.playerCount * 0.7).toFixed(2)} SOL (70%)<br />
-              • Runner-up: {(config.entryFee * config.playerCount * 0.2).toFixed(2)} SOL (20%)<br />
-              • Platform fee: {(config.entryFee * config.playerCount * 0.1).toFixed(2)} SOL (10%)
-            </div>
-          </div>
-
-          {/* Buttons */}
-          <div style={{
-            display: 'flex',
-            gap: '1rem',
-            justifyContent: 'flex-end'
-          }}>
+          {status === 'searching' && (
             <button
-              type="button"
+              onClick={onLeave}
+              style={{
+                padding: '0.75rem',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                color: theme.colors.text.primary,
+                border: `1px solid ${theme.colors.border}`,
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              Cancel Search
+            </button>
+          )}
+
+          {status !== 'searching' && (
+            <button
               onClick={onClose}
-              disabled={isSubmitting}
               style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: '#6c757d',
-                color: 'white',
+                background: 'none',
                 border: 'none',
-                borderRadius: '6px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                opacity: isSubmitting ? 0.6 : 1
+                color: theme.colors.text.secondary,
+                cursor: 'pointer'
               }}
             >
-              Cancel
+              Close
             </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: isSubmitting ? '#6c757d' : '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                minWidth: '120px'
-              }}
-            >
-              {isSubmitting ? 'Creating...' : 'Create Tournament'}
-            </button>
-          </div>
-        </form>
+          )}
+        </div>
       </div>
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -387,23 +142,99 @@ function NewGameModal({ isOpen, onClose, onGameCreated }: {
 
 export default function RPSLobbyPage() {
   const { publicKey } = useWallet();
-  const [showNewGameModal, setShowNewGameModal] = useState(false);
-  const { allGames, loading, error, refreshGames } = useGames();
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
   const location = useLocation();
 
-  const handleGameCreated = (gameId: string) => {
-    console.log('New game created:', gameId);
-    // Refresh games list
-    refreshGames();
+  const [showQuickplayModal, setShowQuickplayModal] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'searching' | 'matched'>('idle');
+  const [waitingPlayers, setWaitingPlayers] = useState<any[]>([]);
+
+  // handleGameCreated removed
+
+  const handleJoinPool = async () => {
+    if (!publicKey) return;
+    try {
+      const client = createWeb3ProgramClient(connection, wallet);
+      const rpsService = new GameService(connection);
+
+      setStatus('searching');
+      setShowQuickplayModal(true);
+
+      // 1. Scan for existing players
+      const pool = await rpsService.fetchWaitingPool();
+      const opponent = pool.find(p => p.player !== publicKey.toString() && Number(p.entry_fee) === 100_000_000);
+
+      if (opponent) {
+        showToast('Found opponent! Matching...', 'success');
+        const matchResult = await client.matchPlayer(opponent.player, `Quickplay vs ${opponent.player.slice(0, 4)}`);
+        setStatus('matched');
+        navigate(`/game/${matchResult.gameId}`);
+        return;
+      }
+
+      // 2. If no opponent, join pool
+      await client.joinPool(0.1);
+      showToast('Waiting for opponent...', 'success');
+    } catch (e: any) {
+      console.error(e);
+      setStatus('idle');
+      showToast(e.message || 'Failed to join matchmaking', 'error');
+    }
   };
 
-  // Check if we should auto-open join for a specific game
-  useEffect(() => {
-    if (location.state?.joinGameId) {
-      // Could auto-scroll to game list or highlight the specific game
-      console.log('Auto-join game:', location.state.joinGameId);
+  const handleLeavePool = async () => {
+    try {
+      const client = createWeb3ProgramClient(connection, wallet);
+      await client.leavePool();
+      setStatus('idle');
+      showToast('Left matchmaking pool', 'info');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to leave pool', 'error');
     }
-  }, [location.state]);
+  };
+
+  // Subscription to watch for matches
+  useEffect(() => {
+    if (status !== 'searching' || !publicKey) return;
+
+    const rpsService = new GameService(connection);
+
+    const interval = setInterval(async () => {
+      // Check if our waiting account still exists
+      const client = createWeb3ProgramClient(connection, wallet);
+      const address = await client.getWaitingAccountAddress(publicKey);
+      const info = await connection.getAccountInfo(address);
+
+      if (!info) {
+        // We've been matched! Our account was closed.
+        // Now find the game we were matched into.
+        // In a real app, we'd use a more robust way to find the game (e.g. index/registry or recent games)
+        // For now, let's refresh games and look for one where we are player 2 and state is InProgress
+        const games = await rpsService.fetchAllGames();
+        const myGame = games.find(g =>
+          g.state === 'InProgress' &&
+          g.name.includes('Quickplay') // Could be more specific
+        );
+
+        if (myGame) {
+          clearInterval(interval);
+          setStatus('matched');
+          showToast('Matched! Entering game...', 'success');
+          navigate(`/game/${myGame.game_address}`);
+        }
+      }
+
+      // Also update waiting player count
+      const pool = await rpsService.fetchWaitingPool();
+      setWaitingPlayers(pool);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [status, publicKey, connection, navigate, wallet]);
 
   const [isMobile, setIsMobile] = useState(false);
 
@@ -434,42 +265,87 @@ export default function RPSLobbyPage() {
             <Swords size={isMobile ? 24 : 32} color={theme.colors.primary.main} /> Rock Paper Scissors
           </h1>
           <p style={{ margin: '0.5rem 0 0 0', color: theme.colors.text.secondary }}>
-            Join a tournament and battle for SOL prizes
+            Join the queue and battle for SOL prizes
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {publicKey && (
-            <button
-              onClick={() => setShowNewGameModal(true)}
-              style={{
-                padding: isMobile ? '0.75rem 1rem' : '0.8rem 1.5rem',
-                fontSize: isMobile ? '0.9rem' : '1rem',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                fontWeight: 'bold',
-                boxShadow: '0 4px 12px rgba(40, 167, 69, 0.2)'
-              }}
-            >
-              <Plus size={20} /> Create Tournament
-            </button>
-          )}
+        {/* Create Tournament button removed */}
+      </div>
+
+      {/* Quickplay Section */}
+      <div style={{
+        marginBottom: '2rem',
+        padding: '1.5rem',
+        backgroundColor: 'rgba(78, 93, 243, 0.05)',
+        borderRadius: '12px',
+        border: `1px solid ${theme.colors.primary.main}44`,
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '1.5rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '12px',
+            backgroundColor: theme.colors.primary.main,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Timer size={24} color="white" />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, color: theme.colors.text.primary }}>Quickplay Mode</h3>
+            <p style={{ margin: '0.25rem 0 0 0', color: theme.colors.text.secondary, fontSize: '0.9rem' }}>
+              Instant 1v1 matching • 90s turns • Rapid SOL rewards
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '1rem', width: isMobile ? '100%' : 'auto' }}>
+          <div style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: theme.colors.surface,
+            borderRadius: '8px',
+            border: `1px solid ${theme.colors.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.9rem',
+            color: theme.colors.text.primary
+          }}>
+            <Users size={16} /> {waitingPlayers.length} Searching...
+          </div>
+
+          <button
+            onClick={() => publicKey ? status === 'searching' ? setShowQuickplayModal(true) : setShowQuickplayModal(true) : showToast('Connect wallet')}
+            style={{
+              padding: '0.8rem 2rem',
+              backgroundColor: status === 'searching' ? '#6c757d' : theme.colors.primary.main,
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              flex: isMobile ? 1 : 'none',
+              boxShadow: `0 4px 12px ${theme.colors.primary.main}44`
+            }}
+          >
+            {status === 'searching' ? 'Searching...' : 'Find Match'}
+          </button>
         </div>
       </div>
 
-      {/* Games list */}
-      <GameList games={allGames} error={error} />
-
-      {/* New game modal */}
-      <NewGameModal
-        isOpen={showNewGameModal}
-        onClose={() => setShowNewGameModal(false)}
-        onGameCreated={handleGameCreated}
+      {/* GameList and NewGameModal removed */}
+      <QuickplayModal
+        isOpen={showQuickplayModal}
+        onClose={() => setShowQuickplayModal(false)}
+        entryFee={0.1}
+        status={status}
+        onJoin={handleJoinPool}
+        onLeave={handleLeavePool}
       />
     </div>
   );

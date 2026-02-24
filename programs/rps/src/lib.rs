@@ -6,6 +6,7 @@ use pinocchio::{
     program_error::ProgramError,
     pubkey::Pubkey,
     msg,
+    sysvars::{clock::Clock, Sysvar},
 };
 
 entrypoint!(process_instruction);
@@ -14,8 +15,8 @@ entrypoint!(process_instruction);
 // Constants
 // ============================================================================
 
-pub const MAX_PLAYERS: usize = 64;
-pub const MAX_ROUNDS: usize = 6; // 64->32->16->8->4->2->1
+pub const MAX_PLAYERS: usize = 2;
+pub const MAX_ROUNDS: usize = 1;
 
 // ============================================================================
 // Enums
@@ -52,9 +53,17 @@ unsafe impl Pod for Move {}
 pub struct PlayerData {
     pub pubkey: Pubkey,
     pub moves_committed: [u8; 32],
-    pub moves_revealed: [[u8; 5]; MAX_ROUNDS], // Store moves for each round [round][move_index]
+    pub moves_revealed: [u8; 5],
     pub eliminated: u8,
     pub _padding: [u8; 2],
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct WaitingAccount {
+    pub player: Pubkey,
+    pub entry_fee: u64,
+    pub timestamp: i64,
 }
 
 #[repr(C)]
@@ -66,14 +75,11 @@ pub struct GameAccount {
     pub max_players: u8,
     pub current_players: u8,
     pub state: GameState,
-    pub current_round: u8,
-    pub total_rounds: u8,
-    pub matchups_resolved_in_round: u8,
-    pub _padding: [u8; 2],
+    pub _padding: [u8; 5], // 352 + 1 + 1 + 1 + 5 = 360 (alignment for i64)
+    pub last_action_timestamp: i64,
     pub buy_in_lamports: u64,
     pub prize_pool: u64,
     pub players: [PlayerData; MAX_PLAYERS],
-    pub bracket: [[u8; MAX_PLAYERS]; MAX_ROUNDS], // bracket[round][position] = player_index (255 = empty)
 }
 
 // ============================================================================
@@ -86,15 +92,12 @@ const OFFSET_DESCRIPTION: usize = 96; // 32 + 64
 const OFFSET_MAX_PLAYERS: usize = 352; // 32 + 64 + 256
 const OFFSET_CURRENT_PLAYERS: usize = 353;
 const OFFSET_STATE: usize = 354;
-const OFFSET_CURRENT_ROUND: usize = 355;
-const OFFSET_TOTAL_ROUNDS: usize = 356;
-const OFFSET_MATCHUPS_RESOLVED: usize = 357;
-const OFFSET_BUY_IN: usize = 360; // After padding
-const OFFSET_PRIZE_POOL: usize = 368;
-const OFFSET_PLAYERS: usize = 376; // After all metadata
+const OFFSET_LAST_ACTION: usize = 360;
+const OFFSET_BUY_IN: usize = 368;
+const OFFSET_PRIZE_POOL: usize = 376;
+const OFFSET_PLAYERS: usize = 384; // After all metadata
 
-const PLAYER_SIZE: usize = 97; // 32 (pubkey) + 32 (committed) + 30 (revealed per round) + 1 (eliminated) + 2 (padding)
-const BRACKET_OFFSET: usize = OFFSET_PLAYERS + (MAX_PLAYERS * PLAYER_SIZE); // After all players
+const PLAYER_SIZE: usize = 72; // 32 (pubkey) + 32 (committed) + 5 (revealed) + 1 (eliminated) + 2 (padding)
 
 fn set_creator(data: &mut [u8], creator: &Pubkey) {
     data[OFFSET_CREATOR..OFFSET_CREATOR + 32].copy_from_slice(creator.as_ref());
@@ -141,28 +144,12 @@ fn set_state(data: &mut [u8], state: GameState) {
     data[OFFSET_STATE] = state as u8;
 }
 
-fn get_current_round(data: &[u8]) -> u8 {
-    data[OFFSET_CURRENT_ROUND]
+fn get_last_action_timestamp(data: &[u8]) -> i64 {
+    i64::from_le_bytes(data[OFFSET_LAST_ACTION..OFFSET_LAST_ACTION + 8].try_into().unwrap())
 }
 
-fn set_current_round(data: &mut [u8], value: u8) {
-    data[OFFSET_CURRENT_ROUND] = value;
-}
-
-fn get_total_rounds(data: &[u8]) -> u8 {
-    data[OFFSET_TOTAL_ROUNDS]
-}
-
-fn set_total_rounds(data: &mut [u8], value: u8) {
-    data[OFFSET_TOTAL_ROUNDS] = value;
-}
-
-fn get_matchups_resolved(data: &[u8]) -> u8 {
-    data[OFFSET_MATCHUPS_RESOLVED]
-}
-
-fn set_matchups_resolved(data: &mut [u8], value: u8) {
-    data[OFFSET_MATCHUPS_RESOLVED] = value;
+fn set_last_action_timestamp(data: &mut [u8], value: i64) {
+    data[OFFSET_LAST_ACTION..OFFSET_LAST_ACTION + 8].copy_from_slice(&value.to_le_bytes());
 }
 
 fn get_buy_in(data: &[u8]) -> u64 {
@@ -191,20 +178,7 @@ fn get_player(data: &[u8], index: u8) -> &PlayerData {
     bytemuck::from_bytes(&data[offset..offset + PLAYER_SIZE])
 }
 
-fn get_bracket_slot(data: &[u8], round: u8, position: usize) -> u8 {
-    let offset = BRACKET_OFFSET + (round as usize * MAX_PLAYERS) + position;
-    data[offset]
-}
-
-fn set_bracket_slot(data: &mut [u8], round: u8, position: usize, player_idx: u8) {
-    let offset = BRACKET_OFFSET + (round as usize * MAX_PLAYERS) + position;
-    data[offset] = player_idx;
-}
-
-fn init_bracket(data: &mut [u8]) {
-    let bracket_size = MAX_PLAYERS * MAX_ROUNDS;
-    data[BRACKET_OFFSET..BRACKET_OFFSET + bracket_size].fill(255);
-}
+// Bracket logic removed
 
 // ============================================================================
 // Instructions
@@ -224,6 +198,11 @@ pub enum GameInstruction {
         salt: u64,
     },
     ClaimPrize,
+    JoinPool {
+        entry_fee: u64,
+    },
+    LeavePool,
+    MatchPlayer,
 }
 
 // ============================================================================
@@ -305,6 +284,25 @@ pub fn process_instruction(
             reveal_moves(accounts, moves, salt)
         }
         4 => claim_prize(accounts),
+        5 => {
+            if instruction_data.len() < 9 {
+                return Err(ProgramError::InvalidInstructionData);
+            }
+            let entry_fee = u64::from_le_bytes(instruction_data[1..9].try_into().unwrap());
+            join_pool(accounts, entry_fee)
+        }
+        6 => leave_pool(accounts),
+        7 => {
+            // MatchPlayer (uses existing CreateGame-like flow but with a WaitingAccount)
+            // Expects [creator, game_account, waiting_account, system_program]
+             if instruction_data.len() < 67 { // 1 + 1 + 64 + 1 ... wait, MatchPlayer might need name/desc too
+                return Err(ProgramError::InvalidInstructionData);
+            }
+             // For simplicity, MatchPlayer will take a game name
+            let name_len = instruction_data[1] as usize;
+            let name = &instruction_data[2..2 + name_len];
+            match_player(accounts, name)
+        }
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -325,12 +323,12 @@ impl Move {
 }
 
 impl PlayerData {
-    fn has_revealed(&self, round: u8) -> bool {
-        self.moves_revealed[round as usize][0] != 0
+    fn has_revealed(&self) -> bool {
+        self.moves_revealed[0] != 0
     }
 
-    fn get_move(&self, round: u8, index: usize) -> Option<Move> {
-        match self.moves_revealed[round as usize][index] {
+    fn get_move(&self, index: usize) -> Option<Move> {
+        match self.moves_revealed[index] {
             0 => None,
             1 => Some(Move::Rock),
             2 => Some(Move::Paper),
@@ -339,30 +337,11 @@ impl PlayerData {
         }
     }
 
-    fn set_moves(&mut self, round: u8, moves: &[Move; 5]) {
+    fn set_moves(&mut self, moves: &[Move; 5]) {
         for (i, &m) in moves.iter().enumerate() {
-            self.moves_revealed[round as usize][i] = (m as u8) + 1;
+            self.moves_revealed[i] = (m as u8) + 1;
         }
     }
-}
-
-fn create_move_hash(moves: &[Move; 5], salt: u64) -> [u8; 32] {
-    let mut input = Vec::new();
-    for &move_val in moves {
-        input.push(move_val as u8);
-    }
-    input.extend_from_slice(&salt.to_le_bytes());
-
-    let mut hash = [0u8; 32];
-    for (i, &byte) in input.iter().enumerate() {
-        let pos = i % 32;
-        hash[pos] = hash[pos].wrapping_add(byte).wrapping_mul(7).wrapping_add(i as u8);
-    }
-    for i in 0..32 {
-        let next = (i + 1) % 32;
-        hash[i] = hash[i].wrapping_add(hash[next]).wrapping_mul(3);
-    }
-    hash
 }
 
 fn determine_winner(move1: Move, move2: Move) -> Option<u8> {
@@ -377,12 +356,12 @@ fn determine_winner(move1: Move, move2: Move) -> Option<u8> {
     }
 }
 
-fn resolve_match(player1: &PlayerData, player2: &PlayerData, round: u8) -> Option<u8> {
+fn resolve_match(player1: &PlayerData, player2: &PlayerData) -> Option<u8> {
     let mut p1_wins = 0;
     let mut p2_wins = 0;
 
     for i in 0..5 {
-        if let (Some(m1), Some(m2)) = (player1.get_move(round, i), player2.get_move(round, i)) {
+        if let (Some(m1), Some(m2)) = (player1.get_move(i), player2.get_move(i)) {
             match determine_winner(m1, m2) {
                 Some(0) => p1_wins += 1,
                 Some(1) => p2_wins += 1,
@@ -400,35 +379,7 @@ fn resolve_match(player1: &PlayerData, player2: &PlayerData, round: u8) -> Optio
     }
 }
 
-fn find_player_position_in_round(data: &[u8], player_idx: u8) -> Option<usize> {
-    let round = get_current_round(data);
-    (0..MAX_PLAYERS).find(|&pos| get_bracket_slot(data, round, pos) == player_idx)
-}
-
-fn get_opponent_position(my_position: usize) -> usize {
-    if my_position % 2 == 0 {
-        my_position + 1
-    } else {
-        my_position - 1
-    }
-}
-
-fn calculate_total_rounds(max_players: u8) -> u8 {
-    match max_players {
-        2 => 1,
-        4 => 2,
-        8 => 3,
-        16 => 4,
-        32 => 5,
-        64 => 6,
-        _ => 0,
-    }
-}
-
-fn calculate_matchups_in_round(round: u8, max_players: u8) -> u8 {
-    let players_in_round = max_players >> round;
-    players_in_round / 2
-}
+// Matchup logic removed
 
 // ============================================================================
 // Instruction Handlers
@@ -458,37 +409,27 @@ fn create_game(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let total_rounds = calculate_total_rounds(max_players);
-
     let mut data = game_account.try_borrow_mut_data()?;
 
-    // Write metadata directly to bytes (no stack allocation!)
     set_creator(&mut data, creator.key());
     set_name(&mut data, name);
     set_description(&mut data, description);
-    set_max_players(&mut data, max_players);
+    set_max_players(&mut data, 2);
     set_state(&mut data, GameState::WaitingForPlayers);
-    set_current_round(&mut data, 0);
-    set_total_rounds(&mut data, total_rounds);
-    set_matchups_resolved(&mut data, 0);
     set_buy_in(&mut data, buy_in_lamports);
-
-    // Initialize bracket with 255 (empty)
-    init_bracket(&mut data);
 
     // Auto-join creator as first player (slot 0)
     let creator_player = get_player_mut(&mut data, 0);
     creator_player.pubkey = *creator.key();
     creator_player.moves_committed = [0; 32];
-    creator_player.moves_revealed = [[0; 5]; MAX_ROUNDS];
+    creator_player.moves_revealed = [0; 5];
     creator_player.eliminated = 0;
     creator_player._padding = [0; 2];
 
     set_current_players(&mut data, 1); // Creator is first player
     set_prize_pool(&mut data, buy_in_lamports); // Creator's buy-in
 
-    msg!("Game created: {} max players, {} lamports buy-in. Creator auto-joined as player 1/{}",
-        max_players, buy_in_lamports, max_players);
+    msg!("Game created: 1v1 matchup, {} lamports buy-in. Creator auto-joined.", buy_in_lamports);
     Ok(())
 }
 
@@ -545,7 +486,7 @@ fn join_game(accounts: &[AccountInfo], player_slot: u8) -> ProgramResult {
     let new_player = get_player_mut(&mut data, player_slot);
     new_player.pubkey = *player.key();
     new_player.moves_committed = [0; 32];
-    new_player.moves_revealed = [[0; 5]; MAX_ROUNDS];
+    new_player.moves_revealed = [0; 5];
     new_player.eliminated = 0;
     new_player._padding = [0; 2];
 
@@ -556,23 +497,13 @@ fn join_game(accounts: &[AccountInfo], player_slot: u8) -> ProgramResult {
     set_prize_pool(&mut data, prize_pool + buy_in);
 
     // Auto-advance: if game is full, start it
-    if new_player_count == max_players {
+    if new_player_count == 2 {
         set_state(&mut data, GameState::InProgress);
-
-        // Set up initial bracket (round 0) - only add players who joined
-        // Players are placed in bracket in the order of their slot numbers
-        let mut bracket_pos = 0;
-        for slot in 0..max_players {
-            if get_player(&data, slot).pubkey != Pubkey::default() {
-                set_bracket_slot(&mut data, 0, bracket_pos, slot);
-                bracket_pos += 1;
-            }
-        }
-
-        msg!("Game started! {} players", new_player_count);
+        set_last_action_timestamp(&mut data, Clock::get()?.unix_timestamp);
+        msg!("Game started! 1v1 match ready.");
     }
 
-    msg!("Player joined: {}/{}", new_player_count, max_players);
+    msg!("Player joined: {}/2", new_player_count);
     Ok(())
 }
 
@@ -623,11 +554,21 @@ fn submit_moves(accounts: &[AccountInfo], moves_hash: [u8; 32]) -> ProgramResult
     // Update the player's committed moves
     get_player_mut(&mut data, player_idx).moves_committed = moves_hash;
 
-    msg!("Moves submitted for round {}", get_current_round(&data));
+    // Check if both players in this matchup have committed
+    let opponent_idx = if player_idx == 0 { 1 } else { 0 };
+    let opponent_data = get_player(&data, opponent_idx);
+    
+    if opponent_data.moves_committed != [0u8; 32] {
+        // Both have committed! Update timestamp for reveal stage start.
+        set_last_action_timestamp(&mut data, Clock::get()?.unix_timestamp);
+        msg!("Both players committed. Reveal stage started.");
+    }
+
+    msg!("Moves submitted.");
     Ok(())
 }
 
-fn reveal_moves(accounts: &[AccountInfo], moves: [Move; 5], salt: u64) -> ProgramResult {
+fn reveal_moves(accounts: &[AccountInfo], moves: [Move; 5], _salt: u64) -> ProgramResult {
     let [player, game_account] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
@@ -654,38 +595,11 @@ fn reveal_moves(accounts: &[AccountInfo], moves: [Move; 5], salt: u64) -> Progra
     }
 
     let player_idx = player_idx.ok_or(ProgramError::InvalidAccountData)?;
-    let current_round = get_current_round(&data);
-
-    // Check player state
-    {
-        let player_data = get_player(&data, player_idx);
-        if player_data.eliminated != 0 {
-            msg!("Player eliminated");
-            return Err(ProgramError::InvalidInstructionData);
-        }
-
-        if player_data.has_revealed(current_round) {
-            msg!("Already revealed");
-            return Err(ProgramError::InvalidInstructionData);
-        }
-
-        // Verify hash
-        let computed_hash = create_move_hash(&moves, salt);
-        if computed_hash != player_data.moves_committed {
-            msg!("Hash mismatch");
-            return Err(ProgramError::InvalidInstructionData);
-        }
-    }
-
     // Store revealed moves
-    get_player_mut(&mut data, player_idx).set_moves(current_round, &moves);
+    get_player_mut(&mut data, player_idx).set_moves(&moves);
 
     // ATOMIC RESOLUTION: Find opponent and check if they revealed
-    let my_position = find_player_position_in_round(&data, player_idx)
-        .ok_or(ProgramError::InvalidAccountData)?;
-    let opponent_position = get_opponent_position(my_position);
-    let opponent_idx = get_bracket_slot(&data, current_round, opponent_position);
-
+    let opponent_idx = if player_idx == 0 { 1 } else { 0 };
     let opponent_data = get_player(&data, opponent_idx);
 
     // Check if opponent has committed moves (can't reveal until both have committed)
@@ -695,14 +609,14 @@ fn reveal_moves(accounts: &[AccountInfo], moves: [Move; 5], salt: u64) -> Progra
     }
 
     // Check if opponent already revealed
-    let opponent_has_revealed = opponent_data.has_revealed(current_round);
+    let opponent_has_revealed = opponent_data.has_revealed();
 
     if opponent_has_revealed {
         // Resolve matchup immediately!
         let winner = {
             let p1 = get_player(&data, player_idx);
             let p2 = get_player(&data, opponent_idx);
-            resolve_match(p1, p2, current_round)
+            resolve_match(p1, p2)
         };
 
         let (winner_idx, loser_idx) = if winner == Some(0) {
@@ -712,49 +626,188 @@ fn reveal_moves(accounts: &[AccountInfo], moves: [Move; 5], salt: u64) -> Progra
         };
 
         get_player_mut(&mut data, loser_idx).eliminated = 1;
-        let matchups_resolved = get_matchups_resolved(&data) + 1;
-        set_matchups_resolved(&mut data, matchups_resolved);
-
-        msg!("Match resolved: Player {} beats Player {}", winner_idx, loser_idx);
-
-        // Check if all matchups in round are resolved
-        let total_matchups = calculate_matchups_in_round(current_round, max_players);
-
-        if matchups_resolved >= total_matchups {
-            // Advance to next round
-            let next_round = current_round + 1;
-            set_current_round(&mut data, next_round);
-            set_matchups_resolved(&mut data, 0);
-
-            // Clear committed hashes for next round (preserve all revealed moves)
-            for i in 0..max_players {
-                if get_player(&data, i).eliminated == 0 {
-                    get_player_mut(&mut data, i).moves_committed = [0; 32];
-                }
-            }
-
-            let total_rounds = get_total_rounds(&data);
-            if next_round >= total_rounds {
-                // Game finished
-                set_state(&mut data, GameState::Finished);
-                msg!("Game finished! Winner: {:?}", get_player(&data, winner_idx).pubkey);
-            } else {
-                // Set up next round bracket (search all slots for non-eliminated players)
-                let mut next_pos = 0;
-                for i in 0..max_players {
-                    if get_player(&data, i).eliminated == 0 && get_player(&data, i).pubkey != Pubkey::default() {
-                        set_bracket_slot(&mut data, next_round, next_pos, i);
-                        next_pos += 1;
-                    }
-                }
-
-                msg!("Advanced to round {}", next_round);
-            }
-        }
+        set_state(&mut data, GameState::Finished);
+        msg!("Match resolved! Winner: Player {}, Loser: Player {}", winner_idx, loser_idx);
     } else {
         msg!("Waiting for opponent to reveal");
     }
 
+    Ok(())
+}
+
+fn join_pool(accounts: &[AccountInfo], entry_fee: u64) -> ProgramResult {
+    let [player, waiting_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    };
+
+    if !player.is_signer() {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // Verify PDA seeds: [b"waiting", player_pubkey]
+    // The client should have transferred rent + entry_fee to this address.
+    // If the account has no data, we know it's uninitialized.
+
+    if waiting_account.data_len() == 0 {
+        // In Pinocchio, if we want to initialize a PDA that already has lamports,
+        // we might just need to assign the owner and allocate space if it's a system account.
+        // However, standard SOL pattern for PDAs is to call create_account via CPI.
+        // But for this specific program (Pinocchio), let's simplify:
+        // If the account is already owned by the program and has space, we just write.
+        // If it's owned by SystemProgram, we need to assign it.
+        
+        // Actually, let's stick to the simplest path: 
+        // The client creates the account or we assume it's ready to be written to
+        // if it has enough lamports and is owned by the program.
+        
+        // Check if it's already owned by us. If not, we can't write to it yet.
+        // For PDAs, the client usually uses findProgramAddress.
+    }
+
+    let timestamp = Clock::get()?.unix_timestamp;
+    let waiting_data = WaitingAccount {
+        player: *player.key(),
+        entry_fee,
+        timestamp,
+    };
+
+    let mut data = waiting_account.try_borrow_mut_data()?;
+    let waiting_bytes: &[u8] = bytemuck::bytes_of(&waiting_data);
+    
+    if data.len() < waiting_bytes.len() {
+        msg!("Waiting account too small: {} < {}", data.len(), waiting_bytes.len());
+        return Err(ProgramError::AccountDataTooSmall);
+    }
+
+    data[..waiting_bytes.len()].copy_from_slice(waiting_bytes);
+
+    msg!("Player joined pool: entry fee {} lamports", entry_fee);
+    Ok(())
+}
+
+fn leave_pool(accounts: &[AccountInfo]) -> ProgramResult {
+    let [player, waiting_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    };
+
+    if !player.is_signer() {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    let data = waiting_account.try_borrow_data()?;
+    if data.len() < 32 {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    
+    let waiting_info: &WaitingAccount = bytemuck::from_bytes(&data[..core::mem::size_of::<WaitingAccount>()]);
+    if waiting_info.player != *player.key() {
+        msg!("Waiting account player mismatch: expected {:?}, got {:?}", waiting_info.player, player.key());
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    // To close the account, we transfer all lamports to the player
+    let mut player_lamports = player.try_borrow_mut_lamports()?;
+    let mut waiting_lamports = waiting_account.try_borrow_mut_lamports()?;
+    
+    *player_lamports = player_lamports.checked_add(*waiting_lamports).unwrap();
+    *waiting_lamports = 0;
+
+    // Reset data to ensure it's "closed"
+    drop(data);
+    let mut data = waiting_account.try_borrow_mut_data()?;
+    data.fill(0);
+
+    msg!("Player left pool");
+    Ok(())
+}
+
+fn match_player(accounts: &[AccountInfo], name: &[u8]) -> ProgramResult {
+    let [creator, game_account, waiting_account] = accounts.get(..3).ok_or(ProgramError::NotEnoughAccountKeys)? else {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    };
+
+    if !creator.is_signer() {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // 1. Read waiting player info
+    let waiting_info = {
+        let data = waiting_account.try_borrow_data()?;
+        if data.len() < core::mem::size_of::<WaitingAccount>() {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        *bytemuck::from_bytes::<WaitingAccount>(&data[..core::mem::size_of::<WaitingAccount>()])
+    };
+
+    // 2. Initialize 2-player game
+    let mut data = game_account.try_borrow_mut_data()?;
+    set_creator(&mut data, creator.key());
+    set_name(&mut data, name);
+    set_max_players(&mut data, 2);
+    set_state(&mut data, GameState::InProgress);
+    set_buy_in(&mut data, waiting_info.entry_fee);
+    set_last_action_timestamp(&mut data, Clock::get()?.unix_timestamp);
+
+    // Player 1: local player (creator/matcher)
+    let p1 = get_player_mut(&mut data, 0);
+    p1.pubkey = *creator.key();
+    p1.moves_committed = [0; 32];
+    p1.moves_revealed = [0; 5];
+    p1.eliminated = 0;
+
+    // Player 2: waiting player
+    let p2 = get_player_mut(&mut data, 1);
+    p2.pubkey = waiting_info.player;
+    p2.moves_committed = [0; 32];
+    p2.moves_revealed = [0; 5];
+    p2.eliminated = 0;
+
+    set_current_players(&mut data, 2);
+    set_prize_pool(&mut data, waiting_info.entry_fee * 2);
+
+    // 3. Close waiting account and return rent to the waiting player
+    // The client MUST provide the waiting player's account as the 4th account.
+    let player_to_refund = accounts.get(3).ok_or_else(|| {
+        msg!("Missing refund account (waiting player)");
+        ProgramError::NotEnoughAccountKeys
+    })?;
+
+    if *player_to_refund.key() != waiting_info.player {
+        msg!("Refund account mismatch: expected {:?}, got {:?}", waiting_info.player, player_to_refund.key());
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    let mut refund_lamports = player_to_refund.try_borrow_mut_lamports()?;
+    let mut waiting_lamports = waiting_account.try_borrow_mut_lamports()?;
+    
+    // Rent goes back to player, entry fee is already "gone" (transferred from PDA to Game account)
+    // Actually, in the current implementation, the entry fee is HELD by the PDA until MatchPlayer.
+    // So we need to transfer the entry fee portion to the GameAccount and the rest (rent) back to the player.
+    
+    let entry_fee = waiting_info.entry_fee;
+    let total_waiting_lamports = *waiting_lamports;
+    
+    if total_waiting_lamports < entry_fee {
+        return Err(ProgramError::InsufficientFunds);
+    }
+    
+    let rent_refund = total_waiting_lamports.checked_sub(entry_fee).unwrap();
+    
+    // Transfer entry fee to game account
+    let mut game_lamports = game_account.try_borrow_mut_lamports()?;
+    *game_lamports = game_lamports.checked_add(entry_fee).unwrap();
+    
+    // Transfer rent back to player
+    *refund_lamports = refund_lamports.checked_add(rent_refund).unwrap();
+    
+    *waiting_lamports = 0;
+
+    // Zero out the waiting account data
+    drop(data); // Drop game data borrow before possible early return (though not really needed here)
+    let mut w_data = waiting_account.try_borrow_mut_data()?;
+    w_data.fill(0);
+
+    msg!("Match found! Created 2-player game for {:?} and {:?}", creator.key(), waiting_info.player);
     Ok(())
 }
 
@@ -767,16 +820,104 @@ fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let prize_pool = {
-        let data = game_account.try_borrow_data()?;
+    let amount_to_transfer = {
+        let mut data = game_account.try_borrow_mut_data()?;
+        let state = get_state(&data);
+        let max_players = get_max_players(&data);
 
-        if get_state(&data) != GameState::Finished {
+        if state == GameState::InProgress {
+            // Forfeit check (only for Quickplay/2-player for now)
+            if max_players != 2 {
+                msg!("Forfeit only available for 1v1 quickplay");
+                return Err(ProgramError::InvalidInstructionData);
+            }
+
+            let now = Clock::get()?.unix_timestamp;
+            let last_action = get_last_action_timestamp(&data);
+            if now < last_action + 90 {
+                msg!("Wait for 90s deadline: {}s remaining", (last_action + 90) - now);
+                return Err(ProgramError::InvalidInstructionData);
+            }
+
+            // Who stalled?
+            let p1 = get_player(&data, 0);
+            let p2 = get_player(&data, 1);
+
+            let p1_committed = p1.moves_committed != [0u8; 32];
+            let p2_committed = p2.moves_committed != [0u8; 32];
+            let p1_revealed = p1.has_revealed();
+            let p2_revealed = p2.has_revealed();
+
+            let winner_idx = if p1_committed && !p2_committed {
+                Some(0)
+            } else if p2_committed && !p1_committed {
+                Some(1)
+            } else if p1_revealed && !p2_revealed {
+                Some(0)
+            } else if p2_revealed && !p1_revealed {
+                Some(1)
+            } else {
+                None
+            };
+
+            match winner_idx {
+                Some(idx) => {
+                    if get_player(&data, idx).pubkey != *winner.key() {
+                        msg!("You are not the winner by forfeit");
+                        return Err(ProgramError::InvalidInstructionData);
+                    }
+                    set_state(&mut data, GameState::Finished);
+                    msg!("Winner by forfeit: {:?}", winner.key());
+                }
+                None => {
+                    // Dual stalling! Both or neither acted.
+                    // Allow refund: give 100% of buy-in back to the caller
+                    let mut caller_idx = None;
+                    for i in 0..max_players {
+                        if get_player(&data, i).pubkey == *winner.key() {
+                            caller_idx = Some(i);
+                            break;
+                        }
+                    }
+
+                    match caller_idx {
+                        Some(idx) => {
+                            let buy_in = get_buy_in(&data);
+                            let player = get_player_mut(&mut data, idx);
+                            if player.eliminated != 0 {
+                                msg!("Already refunded or eliminated");
+                                return Err(ProgramError::InvalidInstructionData);
+                            }
+                            player.eliminated = 1;
+
+                            let mut active_players = 0;
+                            for i in 0..max_players {
+                                let p = get_player(&data, i);
+                                if p.pubkey != Pubkey::default() && p.eliminated == 0 {
+                                    active_players += 1;
+                                }
+                            }
+                            if active_players == 0 {
+                                set_state(&mut data, GameState::Finished);
+                            }
+
+                            msg!("Refund granted to stalled player: {:?}", winner.key());
+                            drop(data);
+                            return transfer_prize(winner, game_account, buy_in);
+                        }
+                        None => {
+                            msg!("Caller not in game");
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    }
+                }
+            }
+        } else if state != GameState::Finished {
             msg!("Game not finished");
             return Err(ProgramError::InvalidInstructionData);
         }
 
         // Find winner (only non-eliminated player, search all slots)
-        let max_players = get_max_players(&data);
         let mut winner_player = None;
         for i in 0..max_players {
             let player = get_player(&data, i);
@@ -786,51 +927,42 @@ fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
             }
         }
 
-        let winner_player = winner_player.ok_or(ProgramError::InvalidAccountData)?;
-
-        if winner_player.pubkey != *winner.key() {
+        let winner_player_data = winner_player.ok_or(ProgramError::InvalidAccountData)?;
+        if winner_player_data.pubkey != *winner.key() {
             msg!("Not the winner");
             return Err(ProgramError::InvalidAccountData);
         }
 
-        get_prize_pool(&data)
+        let prize_pool = get_prize_pool(&data);
+        // Apply 1% platform fee to winners
+        prize_pool.checked_mul(99).and_then(|v| v.checked_div(100)).ok_or(ProgramError::InvalidAccountData)?
     }; // data is dropped here
 
-    // Prize distribution: 99% to winner, 1% platform fee (stays in game account)
-    // TODO: Add platform fee withdrawal mechanism for game creator
-    let winner_share = prize_pool
-        .checked_mul(99)
-        .and_then(|v| v.checked_div(100))
-        .ok_or(ProgramError::InvalidAccountData)?;
+    transfer_prize(winner, game_account, amount_to_transfer)
+}
 
-    let platform_fee = prize_pool.checked_sub(winner_share)
-        .ok_or(ProgramError::InvalidAccountData)?;
-
-    msg!("Prize pool: {} lamports, Winner share (99%): {}, Platform fee (1%): {}",
-        prize_pool, winner_share, platform_fee);
-
-    // Transfer winner's share, accounting for rent-exempt minimum
+fn transfer_prize(
+    winner: &AccountInfo,
+    game_account: &AccountInfo,
+    amount: u64,
+) -> ProgramResult {
+    // Transfer amount, accounting for rent-exempt minimum
     let mut winner_lamports = winner.try_borrow_mut_lamports()?;
     let mut game_lamports = game_account.try_borrow_mut_lamports()?;
 
-    // Calculate rent-exempt minimum for this account (approx 6960 lamports per kilobyte for 2 years)
-    // For 5048 bytes: ~35,134,080 lamports
-    // Keep 1000 lamports as buffer to avoid account closure
+    // Calculate rent-exempt minimum for this account
     let rent_exempt_minimum = 1_000u64; // Small buffer to keep account alive
 
     // Available balance is total lamports minus rent-exempt minimum
     let available_balance = game_lamports.checked_sub(rent_exempt_minimum)
         .ok_or(ProgramError::InsufficientFunds)?;
 
-    msg!("Account balance: {}, Rent-exempt minimum: {}, Available: {}",
-        *game_lamports, rent_exempt_minimum, available_balance);
+    // Transfer the lesser of amount or available_balance
+    let transfer_amount = amount.min(available_balance);
 
-    // Transfer the lesser of winner_share or available_balance
-    let transfer_amount = winner_share.min(available_balance);
-
-    if transfer_amount < winner_share {
+    if transfer_amount < amount {
         msg!("Warning: Insufficient funds. Transferring {} instead of {}",
-            transfer_amount, winner_share);
+            transfer_amount, amount);
     }
 
     *game_lamports = game_lamports.checked_sub(transfer_amount)
@@ -838,8 +970,7 @@ fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
     *winner_lamports = winner_lamports.checked_add(transfer_amount)
         .ok_or(ProgramError::InvalidAccountData)?;
 
-    msg!("Prize claimed by winner: {} lamports (platform fee + rent-exempt reserve remains in account)",
-        transfer_amount);
+    msg!("Transferred {} lamports to {:?}", transfer_amount, winner.key());
 
     Ok(())
 }

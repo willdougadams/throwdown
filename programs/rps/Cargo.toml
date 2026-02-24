@@ -1,10 +1,10 @@
 [package]
-name = "skrim-token-program"
+name = "rps"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "skrim_token_program"
+name = "rps"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]

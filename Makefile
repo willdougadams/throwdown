@@ -16,14 +16,17 @@ help:
 	@echo "  make lint-program      Lint Rust code with clippy"
 	@echo "  make lint-frontend     Lint frontend code"
 	@echo ""
-	@echo "Building:"
 	@echo "  make build             Build everything"
-	@echo "  make build-program     Build Rust program"
+	@echo "  make build-banyan      Build Great Banyan program"
+	@echo "  make build-rps         Build RPS program"
+	@echo "  make build-chess       Build Chess program (placeholder)"
 	@echo "  make build-frontend    Build frontend for production"
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev               Start frontend dev server"
-	@echo "  make deploy            Deploy program to Solana"
+	@echo "  make deploy-banyan     Deploy Great Banyan to Solana"
+	@echo "  make deploy-rps        Deploy RPS to Solana"
+	@echo "  make deploy-chess      Deploy Chess to Solana (placeholder)"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean             Clean all build artifacts"
@@ -44,39 +47,48 @@ test-frontend:
 	@echo "⚛️  Running frontend tests..."
 	@cd frontend && yarn test --passWithNoTests
 
-# Build everything
-build: build-program build-frontend
-	@echo "✅ Build complete!"
-
-# Build Rust program
-build-program:
-	@echo "🦀 Building Rust program..."
-	@cd programs/rps && rm -f Cargo.lock && ~/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools/rust/bin/cargo build-sbf --sbf-out-dir=../../target/deploy
-
-# Build frontend for production
-build-frontend:
-	@echo "⚛️  Building frontend..."
-	@cd frontend && yarn build
-
-# Deploy program to Solana
-deploy:
-	@echo "🚀 Deploying program..."
-	@./deploy.sh
-
-# Run Great Banyan tests
-test-banyan:
-	@echo "🦀 Running Great Banyan tests..."
-	@cd programs/great_banyan && cargo test
+# Build RPS program
+build-rps:
+	@echo "🦀 Building RPS program..."
+	@bash scripts/build-rps.sh
 
 # Build Great Banyan
 build-banyan:
 	@echo "🦀 Building Great Banyan..."
 	@bash scripts/build-banyan.sh
 
+# Build Chess (placeholder)
+build-chess:
+	@echo "♟️  Chess program is currently frontend-only. Script placeholder added."
+
+# Build frontend for production
+build-frontend:
+	@echo "⚛️  Building frontend..."
+	@cd frontend && yarn build
+
+# Deploy RPS
+deploy-rps:
+	@echo "🚀 Deploying RPS..."
+	@bash scripts/deploy-rps.sh
+
 # Deploy Great Banyan
 deploy-banyan:
 	@echo "🚀 Deploying Great Banyan..."
 	@bash scripts/deploy-banyan.sh
+
+# Deploy Chess (placeholder)
+deploy-chess:
+	@echo "♟️  Chess program is currently frontend-only. Script placeholder added."
+
+# Run RPS tests
+test-rps:
+	@echo "🦀 Running RPS tests..."
+	@cd programs/rps && cargo test
+
+# Run Great Banyan tests
+test-banyan:
+	@echo "🦀 Running Great Banyan tests..."
+	@cd programs/great_banyan && cargo test
 
 # Start frontend dev server
 dev:

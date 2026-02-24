@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { createWeb3ProgramClient } from '../services/web3ProgramClient';
-import { BracketDisplay } from '../components/BracketDisplay';
+import { MatchupDisplay } from '../components/MatchupDisplay';
 import { MoveSubmissionModal } from '../components/MoveSubmissionModal';
+import { Timer } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import { theme } from '../theme';
 
@@ -62,6 +63,7 @@ export default function GamePage() {
   const [gameAccountBalance, setGameAccountBalance] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastActionTimestamp, setLastActionTimestamp] = useState<number>(0);
 
   // Fetch game data
   const fetchGameData = async () => {
@@ -86,6 +88,7 @@ export default function GamePage() {
 
       console.log('Raw game details:', gameDetails);
       setRawGameData(gameDetails);
+      setLastActionTimestamp(gameDetails.last_action_timestamp || 0);
 
       // Fetch the actual account balance to detect if prize was claimed
       try {
@@ -135,10 +138,8 @@ export default function GamePage() {
       const convertedGameData = {
         id: gameId,
         state: mapBlockchainStateToUI(gameDetails.state),
-        currentRound: gameDetails.current_round ?? 0,
-        maxPlayers: gameDetails.max_players ?? 8,
+        maxPlayers: gameDetails.max_players ?? 2,
         players,
-        matches: [],
         winner
       };
 
@@ -201,44 +202,29 @@ export default function GamePage() {
   };
 
   const hasUserRevealedMoves = () => {
-    if (!publicKey || !rawGameData || !gameData) return false;
+    if (!publicKey || !rawGameData) return false;
     const userPlayer = rawGameData.players?.find((player: any) =>
       (player.pubkey || player.toString()) === publicKey.toString()
     );
-    const currentRound = gameData.currentRound;
-    // moves_revealed is now [round][move_index]
+    // moves_revealed is now [move_index]
     return userPlayer && userPlayer.moves_revealed &&
-           userPlayer.moves_revealed[currentRound]?.[0] !== null;
+      userPlayer.moves_revealed[0] !== null;
   };
 
   const hasOpponentSubmittedMoves = () => {
-    if (!publicKey || !rawGameData || !gameData) return false;
+    if (!publicKey || !rawGameData) return false;
 
-    // Find current user's slot index (not array index!)
+    // Find current user's slot index
     const userPlayer = rawGameData.players?.find((player: any) =>
       (player.pubkey || player.toString()) === publicKey.toString()
     );
 
     if (!userPlayer || userPlayer.slot === undefined) return false;
-    const userSlotIndex = userPlayer.slot;
 
-    // Find user's position in current round bracket
-    const currentRound = gameData.currentRound;
-    if (!rawGameData.bracket || !rawGameData.bracket[currentRound]) return false;
-
-    const roundBracket = rawGameData.bracket[currentRound];
-    const userPosition = roundBracket.indexOf(userSlotIndex);
-
-    if (userPosition === -1) return false;
-
-    // Opponent is at the adjacent position (0↔1, 2↔3, etc.)
-    const opponentPosition = userPosition % 2 === 0 ? userPosition + 1 : userPosition - 1;
-    const opponentSlotIndex = roundBracket[opponentPosition];
-
-    if (opponentSlotIndex === undefined || opponentSlotIndex === 255) return false;
-
-    // Find opponent player by slot index
+    // Opponent is simply the other player (slot 0 or 1)
+    const opponentSlotIndex = userPlayer.slot === 0 ? 1 : 0;
     const opponentPlayer = rawGameData.players?.find((p: any) => p.slot === opponentSlotIndex);
+
     if (!opponentPlayer || !opponentPlayer.moves_committed) return false;
 
     const movesCommitted = Array.isArray(opponentPlayer.moves_committed)
@@ -282,7 +268,7 @@ export default function GamePage() {
       saveMovesToLocalStorage(
         publicKey.toString(),
         gameId,
-        gameData?.currentRound ?? 0,
+        0, // Round always 0
         selectedMoves,
         salt
       );
@@ -442,11 +428,63 @@ export default function GamePage() {
         padding: '1rem',
         marginBottom: '1rem'
       }}>
-        <h1 style={{ color: theme.colors.text.primary, margin: 0 }}>Tournament Bracket</h1>
+        <h1 style={{ color: theme.colors.text.primary, margin: 0 }}>Matchup</h1>
+        {gameData.maxPlayers === 2 && gameData.state === 'in_progress' && (() => {
+          const now = Math.floor(Date.now() / 1000);
+          const deadline = lastActionTimestamp + 90;
+          const isStalled = now >= deadline;
+
+          return (
+            <div style={{
+              marginTop: '1rem',
+              padding: theme.spacing.lg,
+              backgroundColor: isStalled ? 'rgba(244, 67, 54, 0.1)' : 'rgba(33, 150, 243, 0.1)',
+              borderRadius: theme.borderRadius.md,
+              border: `2px solid ${isStalled ? theme.colors.error : theme.colors.primary.main}`,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: theme.spacing.sm
+            }}>
+              <div style={{
+                color: isStalled ? theme.colors.error : theme.colors.primary.main,
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <Timer size={20} />
+                {isStalled ? 'Game Stalled: Action Deadline Passed' : `Action Deadline: ${new Date(deadline * 1000).toLocaleTimeString()}`}
+              </div>
+
+              {isStalled && isUserInGame() && (
+                <div style={{ marginTop: theme.spacing.sm }}>
+                  <p style={{ color: theme.colors.text.secondary, marginBottom: theme.spacing.md }}>
+                    The opponent (or both of you) missed the 90s deadline.
+                    You can now claim the prize by forfeit or request a refund of your buy-in.
+                  </p>
+                  <button
+                    onClick={handleClaimPrize}
+                    style={{
+                      padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+                      backgroundColor: theme.colors.error,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: theme.borderRadius.sm,
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Claim Refund / Forfeit
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
-      {/* Bracket display with join functionality */}
-      <BracketDisplay
+      {/* 1v1 Matchup display with join functionality */}
+      <MatchupDisplay
         gameData={gameData}
         rawGameData={rawGameData}
         currentUserPublicKey={publicKey?.toString() || null}

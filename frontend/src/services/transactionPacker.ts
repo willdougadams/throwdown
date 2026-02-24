@@ -21,8 +21,8 @@ export enum GameState {
   Finished = 2,
 }
 
-export const MAX_PLAYERS = 64;
-export const MAX_ROUNDS = 6;
+export const MAX_PLAYERS = 2;
+export const MAX_ROUNDS = 1;
 
 /**
  * Instruction discriminators matching the Rust program
@@ -33,6 +33,9 @@ export enum InstructionType {
   SubmitMoves = 2,
   RevealMoves = 3,
   ClaimPrize = 4,
+  JoinPool = 5,
+  LeavePool = 6,
+  MatchPlayer = 7,
 }
 
 export class TransactionPacker {
@@ -40,7 +43,7 @@ export class TransactionPacker {
    * Pack CreateGame instruction
    * Format: [discriminator: u8][max_players: u8][buy_in_lamports: u64][name_len: u8][name: [u8; name_len]][description_len: u8][description: [u8; description_len]]
    */
-  static packCreateGame(maxPlayers: number, buyInLamports: bigint, name: string = '', description: string = ''): Uint8Array {
+  static packCreateGame(buyInLamports: bigint, name: string = '', description: string = ''): Uint8Array {
     const nameBytes = new TextEncoder().encode(name);
     const descriptionBytes = new TextEncoder().encode(description);
 
@@ -53,8 +56,8 @@ export class TransactionPacker {
     }
 
     // Calculate total size
-    // 1 (discriminator) + 1 (max_players) + 8 (buy_in) + 1 (name_len) + name + 1 (desc_len) + description
-    const size = 12 + nameBytes.length + descriptionBytes.length;
+    // 1 (discriminator) + 8 (buy_in) + 1 (name_len) + name + 1 (desc_len) + description
+    const size = 11 + nameBytes.length + descriptionBytes.length;
     const data = new Uint8Array(size);
     const view = new DataView(data.buffer);
 
@@ -62,10 +65,6 @@ export class TransactionPacker {
 
     // Discriminator
     view.setUint8(offset, InstructionType.CreateGame);
-    offset += 1;
-
-    // Max players
-    view.setUint8(offset, maxPlayers);
     offset += 1;
 
     // Buy-in lamports (little-endian u64)
@@ -144,6 +143,43 @@ export class TransactionPacker {
    */
   static packClaimPrize(): Uint8Array {
     return new Uint8Array([InstructionType.ClaimPrize]);
+  }
+
+  /**
+   * Pack JoinPool instruction
+   * Format: [discriminator: u8][entry_fee: u64]
+   */
+  static packJoinPool(entryFee: bigint): Uint8Array {
+    const data = new Uint8Array(9);
+    const view = new DataView(data.buffer);
+    view.setUint8(0, InstructionType.JoinPool);
+    view.setBigUint64(1, entryFee, true);
+    return data;
+  }
+
+  /**
+   * Pack LeavePool instruction
+   * Format: [discriminator: u8]
+   */
+  static packLeavePool(): Uint8Array {
+    return new Uint8Array([InstructionType.LeavePool]);
+  }
+
+  /**
+   * Pack MatchPlayer instruction
+   * Format: [discriminator: u8][name_len: u8][name: [u8; name_len]]
+   */
+  static packMatchPlayer(name: string): Uint8Array {
+    const nameBytes = new TextEncoder().encode(name);
+    if (nameBytes.length > 64) {
+      throw new Error(`Game name too long: ${nameBytes.length} bytes (max 64)`);
+    }
+
+    const data = new Uint8Array(2 + nameBytes.length);
+    data[0] = InstructionType.MatchPlayer;
+    data[1] = nameBytes.length;
+    data.set(nameBytes, 2);
+    return data;
   }
 
   /**
@@ -233,18 +269,15 @@ export class GameAccountDeserializer {
     const max_players = view.getUint8(offset); offset += 1;
     const current_players = view.getUint8(offset); offset += 1;
     const state = view.getUint8(offset); offset += 1;
-    const current_round = view.getUint8(offset); offset += 1;
-    const total_rounds = view.getUint8(offset); offset += 1;
-    const matchups_resolved_in_round = view.getUint8(offset); offset += 1;
-    offset += 2; // _padding
+    offset += 3; // _padding
 
+    const last_action_timestamp = view.getBigInt64(offset, true); offset += 8;
     const buy_in_lamports = view.getBigUint64(offset, true); offset += 8;
     const prize_pool = view.getBigUint64(offset, true); offset += 8;
 
-    // Read players array (fixed size: 64 players)
-    // IMPORTANT: Preserve slot indices by including ALL slots (empty or not)
+    // Read players array (fixed size: 2 players)
     const players = [];
-    const playerSize = 32 + 32 + 30 + 1 + 2; // pubkey + committed + revealed (5 moves * 6 rounds) + eliminated + padding
+    const playerSize = 32 + 32 + 5 + 1 + 2; // pubkey + committed + revealed (5 moves) + eliminated + padding = 72
 
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const playerOffset = offset + (i * playerSize);
@@ -262,50 +295,24 @@ export class GameAccountDeserializer {
         const pubkey = new PublicKey(pubkeyBytes);
         const moves_committed = new Uint8Array(data.buffer, data.byteOffset + playerOffset + 32, 32);
 
-        // Read all rounds of moves (30 bytes = 6 rounds * 5 moves per round)
-        const moves_revealed_bytes = new Uint8Array(data.buffer, data.byteOffset + playerOffset + 64, 30);
+        // Read revealed moves (5 bytes)
+        const moves_revealed_bytes = new Uint8Array(data.buffer, data.byteOffset + playerOffset + 64, 5);
+        const moves_revealed = Array.from(moves_revealed_bytes).map(byteVal => byteVal === 0 ? null : byteVal - 1);
 
-        // Parse into array of rounds, where each round has 5 moves
-        const moves_revealed = [];
-        for (let round = 0; round < MAX_ROUNDS; round++) {
-          const roundMoves = [];
-          for (let moveIdx = 0; moveIdx < 5; moveIdx++) {
-            const byteVal = moves_revealed_bytes[round * 5 + moveIdx];
-            roundMoves.push(byteVal === 0 ? null : byteVal - 1); // 0 = not revealed, 1-3 = Move + 1
-          }
-          moves_revealed.push(roundMoves);
-        }
-
-        const eliminated = view.getUint8(playerOffset + 94); // offset changed: 32 + 32 + 30
+        const eliminated = view.getUint8(playerOffset + 69); // offset: 32 + 32 + 5
 
         players.push({
-          slot: i, // Include the actual slot index
+          slot: i,
           pubkey: pubkey.toString(),
           moves_committed: Array.from(moves_committed),
-          moves_revealed: moves_revealed, // Now an array of rounds, each with 5 moves
+          moves_revealed: moves_revealed,
           eliminated: eliminated !== 0
         });
       }
     }
     offset += MAX_PLAYERS * playerSize;
 
-    // Read bracket (6 rounds x 64 positions) - only if data is large enough
-    const bracket = [];
-    if (offset + (MAX_ROUNDS * MAX_PLAYERS) <= data.length) {
-      for (let round = 0; round < MAX_ROUNDS; round++) {
-        const roundBracket = [];
-        for (let pos = 0; pos < MAX_PLAYERS; pos++) {
-          const playerIdx = view.getUint8(offset);
-          offset += 1;
-          if (playerIdx !== 255) { // 255 = empty
-            roundBracket.push(playerIdx);
-          }
-        }
-        if (roundBracket.length > 0) {
-          bracket.push(roundBracket);
-        }
-      }
-    }
+    // Bracket logic removed
 
     // Convert state enum to string
     const stateNames = ['WaitingForPlayers', 'InProgress', 'Finished'];
@@ -320,12 +327,9 @@ export class GameAccountDeserializer {
       current_players,
       state: stateName,
       stateValue: state,
-      current_round,
-      total_rounds,
-      matchups_resolved_in_round,
       prize_pool,
-      players,
-      bracket
+      last_action_timestamp: Number(last_action_timestamp),
+      players
     };
   }
 
@@ -356,6 +360,32 @@ export class GameAccountDeserializer {
 }
 
 /**
+ * Waiting Account Deserializer
+ */
+export class WaitingAccountDeserializer {
+  /**
+   * Deserialize a waiting account
+   * Format: [player: Pubkey][entry_fee: u64][timestamp: i64]
+   */
+  static deserialize(data: Uint8Array): any {
+    if (data.length < 48) return null;
+    const view = new DataView(data.buffer, data.byteOffset);
+
+    const playerBytes = new Uint8Array(data.buffer, data.byteOffset, 32);
+    const player = new PublicKey(playerBytes).toString();
+
+    const entry_fee = view.getBigUint64(32, true);
+    const timestamp = view.getBigInt64(40, true);
+
+    return {
+      player,
+      entry_fee,
+      timestamp: Number(timestamp)
+    };
+  }
+}
+
+/**
  * Account Size Calculator
  */
 export class AccountSizeCalculator {
@@ -371,20 +401,15 @@ export class AccountSizeCalculator {
       1 +      // max_players: u8
       1 +      // current_players: u8
       1 +      // state: GameState (u8)
-      1 +      // current_round: u8
-      1 +      // total_rounds: u8
-      1 +      // matchups_resolved_in_round: u8
-      2 +      // _padding: [u8; 2]
+      5 +      // _padding: [u8; 5] (to align i64 at 360)
+      8 +      // last_action_timestamp: i64
       8 +      // buy_in_lamports: u64
       8;       // prize_pool: u64
 
-    // Players array: [PlayerData; 64]
-    const playerSize = 32 + 32 + 30 + 1 + 2; // pubkey + committed + revealed (5 moves * 6 rounds) + eliminated + padding
+    // Players array: [PlayerData; 2]
+    const playerSize = 32 + 32 + 5 + 1 + 2; // pubkey + committed + revealed + eliminated + padding = 72
     const playersSize = MAX_PLAYERS * playerSize;
 
-    // Bracket: [[u8; 64]; 6]
-    const bracketSize = MAX_ROUNDS * MAX_PLAYERS;
-
-    return baseSize + playersSize + bracketSize;
+    return baseSize + playersSize;
   }
 }

@@ -1,12 +1,12 @@
-# Skrim - Rock Paper Scissors Tournament
+# Skrim - Rock Paper Scissors Arena
 
-A Solana blockchain tournament system featuring bracket-based Rock Paper Scissors competitions with SOL buy-ins and winner-takes-all payouts.
+A Solana blockchain arena featuring 1v1 Rock Paper Scissors matches with SOL buy-ins and winner-takes-all payouts.
 
 ## Overview
 
 This project demonstrates advanced Solana program development using Pinocchio, a zero-dependency library that optimizes compute unit usage. The full-featured implementation includes:
 
-- **🥊 Tournament System**: Create brackets for 4, 8, 16, or 32 players
+- **🥊 1v1 Matchups**: Quick, instant-on matches between two players
 - **💰 SOL Buy-ins**: Configurable entry fees with automatic prize distribution  
 - **🔒 Commit-Reveal Scheme**: Secure move submission prevents cheating
 - **⚡ Efficient Execution**: Built with Pinocchio for optimized compute usage

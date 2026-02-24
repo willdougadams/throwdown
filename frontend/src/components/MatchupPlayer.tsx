@@ -62,7 +62,7 @@ export function MatchupPlayer({
 
     if (isJoining) return;
 
-    const toastId = showToast('Joining tournament...', 'loading');
+    const toastId = showToast('Joining match...', 'loading');
     setIsJoining(true);
 
     try {

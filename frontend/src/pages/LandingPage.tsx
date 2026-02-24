@@ -107,7 +107,7 @@ export default function LandingPage() {
       }}>
         <GameCard
           title="Rock Paper Scissors"
-          description="Tournament-style RPS with SOL prizes. Join a bracket, commit your moves, and battle your way to the top."
+          description="1v1 RPS with SOL prizes. Join a match, commit your moves, and win the prize pool."
           icon={<Swords size={24} />}
           path="/rps-lobby"
           color={theme.colors.primary.main}
