@@ -20,7 +20,7 @@ echo "🌐 Setting cluster to $NETWORK..."
 if [ "$NETWORK" = "localnet" ]; then
     solana config set --url http://127.0.0.1:8899
 elif [ "$NETWORK" = "devnet" ]; then
-    solana config set --url https://devnet.helius-rpc.com/?api-key=adaff95b-72b5-4898-b349-30a3c5a8f244
+    solana config set --url https://api.devnet.solana.com
 elif [ "$NETWORK" = "mainnet" ]; then
     solana config set --url https://api.mainnet-beta.solana.com
 else

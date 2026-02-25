@@ -304,6 +304,11 @@ export const GreatBanyanGame: React.FC = () => {
                 fetchBud(rightPda);
             }
 
+            // Auto-close after 1 second
+            setTimeout(() => {
+                setSelectedBudAddress(null);
+            }, 1000);
+
         } catch (e) {
             console.error("Nurture failed", e);
             if ((e as any).logs) {

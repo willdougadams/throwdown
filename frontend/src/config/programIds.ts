@@ -22,7 +22,7 @@ export function getCurrentNetwork(): Network {
   return 'devnet';
 }
 
-export function getProgramId(program: 'banyan' | 'rps' = 'rps', network?: Network): PublicKey {
+export function getProgramId(program: 'banyan' | 'rps' | 'chess' = 'rps', network?: Network): PublicKey {
   const targetNetwork = network || getCurrentNetwork();
 
   // Map mainnet-beta to mainnet for the JSON lookup

@@ -8,25 +8,34 @@ import { GAME_RULES } from '../src/config/gameRules';
 const ID_FILE = path.join(__dirname, '../../scripts/program-ids.json');
 
 async function main() {
+    const network = process.argv[2] || 'localnet';
+
     if (!fs.existsSync(ID_FILE)) {
         console.error("❌ Program ID file not found at " + ID_FILE);
         process.exit(1);
     }
 
     const ids = JSON.parse(fs.readFileSync(ID_FILE, 'utf8'));
-    const localnet = ids.localnet;
-    const programIdStr = typeof localnet === 'string' ? localnet : localnet.banyan;
+    const netData = ids[network];
+    const programIdStr = typeof netData === 'string' ? netData : netData?.banyan;
+
     if (!programIdStr) {
-        console.error("❌ No localnet account found in ID file.");
+        console.error(`❌ No ${network} account found in ID file.`);
         process.exit(1);
     }
     const PROGRAM_ID = new PublicKey(programIdStr);
 
-    console.log(`🌿 Initializing Great Banyan Global Singleton on Localnet...`);
+    console.log(`🌿 Initializing Great Banyan Global Singleton on ${network}...`);
     console.log(`ProgID: ${PROGRAM_ID.toString()} `);
 
     // Connection
-    const connection = new Connection("http://127.0.0.1:8899", "confirmed");
+    let rpcUrl = "http://127.0.0.1:8899";
+    if (network === 'devnet') {
+        rpcUrl = 'https://devnet.helius-rpc.com/?api-key=adaff95b-72b5-4898-b349-30a3c5a8f244';
+    } else if (network === 'mainnet') {
+        rpcUrl = 'https://api.mainnet-beta.solana.com';
+    }
+    const connection = new Connection(rpcUrl, "confirmed");
 
     // Payer
     const home = process.env.HOME || process.env.USERPROFILE;

@@ -30,19 +30,25 @@ export const BudModal: React.FC<BudModalProps> = ({
     const isReadyToBloom = bud.vitalityCurrent >= bud.vitalityRequired;
 
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            backdropFilter: 'blur(4px)'
-        }}>
+        <div
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+            style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                backdropFilter: 'blur(4px)',
+                cursor: 'pointer'
+            }}
+        >
             <div style={{
                 backgroundColor: theme.colors.surface,
                 border: `1px solid ${theme.colors.border}`,
@@ -51,56 +57,59 @@ export const BudModal: React.FC<BudModalProps> = ({
                 maxWidth: '500px',
                 width: '90%',
                 color: theme.colors.text.primary,
-                boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+                boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                cursor: 'default'
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                    <h2 style={{ margin: 0, fontSize: '1.5rem', color: theme.colors.primary.main }}>Nurture this Bud</h2>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.colors.text.secondary, cursor: 'pointer', fontSize: '1.5rem' }}>×</button>
-                </div>
 
 
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                        <span style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>GROWTH PROGRESS</span>
-                        <span>{bud.vitalityCurrent.toString()} / {bud.vitalityRequired.toString()}</span>
-                    </div>
-                    <div style={{ height: '8px', backgroundColor: theme.colors.background, borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                    <div style={{ position: 'relative', width: '80px', height: '80px', marginBottom: '1rem' }}>
+                        <svg viewBox="0 0 36 36" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                            <circle
+                                cx="18"
+                                cy="18"
+                                r="16"
+                                fill="none"
+                                stroke={theme.colors.background}
+                                strokeWidth="3"
+                            />
+                            <circle
+                                cx="18"
+                                cy="18"
+                                r="16"
+                                fill="none"
+                                stroke={isReadyToBloom ? theme.colors.secondary.main : theme.colors.primary.main}
+                                strokeWidth="3"
+                                strokeDasharray={`${progress}, 100`}
+                                strokeLinecap="round"
+                                style={{ transition: 'stroke-dasharray 0.3s ease' }}
+                            />
+                        </svg>
                         <div style={{
-                            width: `${progress}%`,
-                            height: '100%',
-                            backgroundColor: isReadyToBloom ? theme.colors.secondary.main : theme.colors.primary.main,
-                            transition: 'width 0.3s ease'
-                        }} />
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '1rem',
+                            fontWeight: 'bold'
+                        }}>
+                            {Math.round(progress)}%
+                        </div>
                     </div>
-                </div>
-
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>RECENT NURTURERS</div>
-                    <div style={{ fontSize: '0.875rem', backgroundColor: theme.colors.background, padding: '0.5rem', borderRadius: '8px' }}>
-                        {bud.contributions && bud.contributions.length > 0 ? (
-                            <ul style={{ margin: 0, paddingLeft: '1.2rem', listStyle: 'circle' }}>
-                                {bud.contributions.map(([pk, amount], idx) => (
-                                    <li key={idx}>
-                                        {pk.toString().slice(0, 4)}...{pk.toString().slice(-4)}: <strong>{amount.toString()}</strong>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <span style={{ opacity: 0.6 }}>No contributors yet</span>
-                        )}
-                    </div>
-                </div>
-
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>STATUS</div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <Badge label="Bloomed" active={bud.isBloomed} />
-                        <Badge label="Fruit" active={bud.isFruit} />
+                    <div>
+                        <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.25rem' }}>Growth</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
+                            {bud.vitalityCurrent.toString()} / {bud.vitalityRequired.toString()}
+                        </div>
                     </div>
                 </div>
 
                 {!bud.isBloomed && (
-                    <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: '1.5rem' }}>
+                    <div style={{ paddingBottom: (bud.contributions && bud.contributions.length > 0) ? '1.5rem' : 0 }}>
                         {isReadyToBloom ? (
                             <button
                                 onClick={onBloom}
@@ -155,21 +164,23 @@ export const BudModal: React.FC<BudModalProps> = ({
                         )}
                     </div>
                 )}
+
+                {bud.contributions && bud.contributions.length > 0 && (
+                    <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: '1.5rem' }}>
+                        <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>nurtured by</div>
+                        <div style={{ fontSize: '0.875rem', backgroundColor: theme.colors.background, padding: '0.5rem', borderRadius: '8px' }}>
+                            <ul style={{ margin: 0, paddingLeft: '1.2rem', listStyle: 'circle' }}>
+                                {bud.contributions.map(([pk, amount], idx) => (
+                                    <li key={idx}>
+                                        {pk.toString().slice(0, 4)}...{pk.toString().slice(-4)}: <strong>{amount.toString()}</strong>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
 };
 
-const Badge = ({ label, active }: { label: string, active: boolean }) => (
-    <span style={{
-        padding: '0.25rem 0.75rem',
-        borderRadius: '999px',
-        fontSize: '0.75rem',
-        fontWeight: 'bold',
-        backgroundColor: active ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-        color: active ? '#4caf50' : theme.colors.text.secondary,
-        border: `1px solid ${active ? '#4caf50' : 'transparent'}`
-    }}>
-        {label}
-    </span>
-);

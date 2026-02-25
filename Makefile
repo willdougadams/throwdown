@@ -1,5 +1,7 @@
 .PHONY: help test test-program test-frontend build build-program build-frontend deploy dev clean lint lint-program lint-frontend coverage coverage-program init-banyan banyan-bot
 
+NETWORK ?= localnet
+
 # Default target
 help:
 	@echo "🎮 Skrim - Available Commands"
@@ -16,6 +18,7 @@ help:
 	@echo "  make lint-program      Lint Rust code with clippy"
 	@echo "  make lint-frontend     Lint frontend code"
 	@echo ""
+	@echo "Building:"
 	@echo "  make build             Build everything"
 	@echo "  make build-banyan      Build Great Banyan program"
 	@echo "  make build-rps         Build RPS program"
@@ -34,66 +37,57 @@ help:
 	@echo "  make clean-frontend    Clean frontend build artifacts"
 
 # Run all tests
-test: test-program test-frontend
-	@echo "✅ All tests passed!"
+test:
+	@node scripts/test.js all
 
 # Run Rust program tests
 test-program:
-	@echo "🦀 Running Rust tests..."
-	@cd programs/rps && cargo test
+	@node scripts/test.js rps
+
+test-rps:
+	@node scripts/test.js rps
+
+test-banyan:
+	@node scripts/test.js banyan
+
+test-chess:
+	@node scripts/test.js chess
 
 # Run frontend tests
 test-frontend:
-	@echo "⚛️  Running frontend tests..."
-	@cd frontend && yarn test --passWithNoTests
+	@node scripts/test.js frontend
 
 # Build RPS program
 build-rps:
-	@echo "🦀 Building RPS program..."
-	@bash scripts/build-rps.sh
+	@node scripts/build.js rps
 
 # Build Great Banyan
 build-banyan:
-	@echo "🦀 Building Great Banyan..."
-	@bash scripts/build-banyan.sh
+	@node scripts/build.js banyan
 
+# Build Chess program
 build-chess:
-	@echo "🦀 Building Chess program..."
-	@bash scripts/build-chess.sh
+	@node scripts/build.js chess
+
+# Build everything
+build:
+	@node scripts/build.js all
 
 # Build frontend for production
 build-frontend:
-	@echo "⚛️  Building frontend..."
-	@cd frontend && yarn build
+	@node scripts/build.js frontend
 
 # Deploy RPS
 deploy-rps:
-	@echo "🚀 Deploying RPS..."
-	@bash scripts/deploy-rps.sh
+	@node scripts/deploy.js rps $(NETWORK)
 
 # Deploy Great Banyan
 deploy-banyan:
-	@echo "🚀 Deploying Great Banyan..."
-	@bash scripts/deploy-banyan.sh
+	@node scripts/deploy.js banyan $(NETWORK)
 
 # Deploy Chess
 deploy-chess:
-	@echo "🚀 Deploying Chess..."
-	@bash scripts/deploy-chess.sh
-
-# Run RPS tests
-test-rps:
-	@echo "🦀 Running RPS tests..."
-	@cd programs/rps && cargo test
-
-# Run Great Banyan tests
-test-banyan:
-	@echo "🦀 Running Great Banyan tests..."
-	@cd programs/great_banyan && cargo test
-# Run Chess tests
-test-chess:
-	@echo "🦀 Running Chess tests..."
-	@cd programs/idiot_chess && cargo test
+	@node scripts/deploy.js chess $(NETWORK)
 
 # Start frontend dev server
 dev:
@@ -101,51 +95,42 @@ dev:
 	@cd frontend && yarn dev
 
 # Clean all build artifacts
-clean: clean-program clean-frontend
-	@echo "🧹 All build artifacts removed"
+clean:
+	@node scripts/clean.js all
 
 # Clean Rust build artifacts
 clean-program:
-	@echo "🧹 Cleaning Rust build artifacts..."
-	@cd programs/rps && cargo clean
-	@rm -rf target
+	@node scripts/clean.js all # Cleans all program targets
 
 # Clean frontend build artifacts
 clean-frontend:
-	@echo "🧹 Cleaning frontend build artifacts..."
-	@cd frontend && rm -rf dist node_modules/.cache
+	@node scripts/clean.js frontend
 
 # Lint all code
-lint: lint-program lint-frontend
-	@echo "✅ All linting passed!"
+lint:
+	@node scripts/lint.js all
 
 # Lint Rust code with clippy
 lint-program:
-	@echo "🦀 Running Rust clippy..."
-	@cd programs/rps && cargo clippy --all-targets -- -W clippy::all
+	@node scripts/lint.js program
 
 # Lint frontend code
 lint-frontend:
-	@echo "⚛️  Running frontend linter..."
-	@cd frontend && yarn lint || echo "No lint script configured"
+	@node scripts/lint.js frontend
 
-# Run test coverage (both)
-coverage: coverage-program
-	@echo "✅ Coverage report complete!"
-
-# Run Rust test coverage
-coverage-program:
-	@echo "🦀 Running Rust test coverage..."
-	@echo "📦 Installing cargo-llvm-cov if needed..."
-	@cargo llvm-cov --version > /dev/null 2>&1 || cargo install cargo-llvm-cov
+# Coverage (Keep as is if tools are present, or migrate if needed)
+coverage:
 	@cd programs/rps && cargo llvm-cov --html
-	@echo "📊 Coverage report: programs/rps/target/llvm-cov/html/index.html"
+
+coverage-program:
+	@cd programs/rps && cargo llvm-cov --html
 
 init-banyan:
-	@echo "🌱 Initializing Banyan..."
-	@cd frontend && yarn install && yarn init-banyan
+	@echo "🌱 Initializing Banyan on $(NETWORK)..."
+	@cd frontend && npx tsx scripts/init-banyan.ts $(NETWORK)
 
 banyan-bot:
 	@echo "🤖 Starting Banyan Bot..."
 	@cd frontend && npx tsx scripts/banyan-bot.ts
+
 	
