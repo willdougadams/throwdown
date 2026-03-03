@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useTranslation } from 'react-i18next';
-import { GameState, Position, IdiotChessEngine, BOARD_SIZE, Piece, PieceType, Player } from '../components/idiot_chess/GameEngine';
+import { GameState, Piece, Player, IdiotChessEngine, PieceType } from '../components/idiot_chess/GameEngine';
 import Board from '../components/idiot_chess/Board';
 import ChessClock from '../components/idiot_chess/ChessClock';
 import GameOverOverlay from '../components/idiot_chess/GameOverOverlay';
@@ -11,7 +11,7 @@ import { createWeb3ProgramClient } from '../services/web3ProgramClient';
 import { GameService } from '../services/gameService';
 import { useToast } from '../contexts/ToastContext';
 import { theme } from '../theme';
-import { Trophy, Users, Shield, Cpu, ExternalLink, RefreshCw } from 'lucide-react';
+import { Users, Shield, Cpu, RefreshCw, Trophy, ExternalLink } from 'lucide-react';
 
 interface IdiotChessPageProps {
     gameId?: string;
@@ -34,7 +34,7 @@ const IdiotChessPage: React.FC<IdiotChessPageProps> = ({ gameId: propGameId, mod
 
     // Use ref to keep engine instance stable, state to trigger re-renders
     const engineRef = useRef(new IdiotChessEngine());
-    const [gameState, setGameState] = useState(engineRef.current.getState());
+    const [gameState, setGameState] = useState<GameState>(engineRef.current.getState());
     const [onChainData, setOnChainData] = useState<any>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -125,14 +125,7 @@ const IdiotChessPage: React.FC<IdiotChessPageProps> = ({ gameId: propGameId, mod
         }
     };
 
-    const handleReset = () => {
-        if (isLive) {
-            refreshOnChain();
-        } else {
-            engineRef.current = new IdiotChessEngine();
-            setGameState(engineRef.current.getState());
-        }
-    };
+    // handleReset removed as it is unused in the template
 
     const handleClaimPrize = async () => {
         if (!isLive || !gameId || !connected) return;
@@ -176,11 +169,10 @@ const IdiotChessPage: React.FC<IdiotChessPageProps> = ({ gameId: propGameId, mod
                     engineRef.current.tick(1);
                     setGameState({ ...engineRef.current.getState() });
 
-                    // Check for timeout win on-chain
-                    const now = Math.floor(Date.now() / 1000);
-                    const elapsed = now - (onChainData?.last_action_timestamp || now);
-                    const turn = gameState.turn === 'white' ? 'white' : 'black';
-                    const remaining = (turn === 'white' ? gameState.whiteTimeSeconds : gameState.blackTimeSeconds) - elapsed;
+                    // const now = Math.floor(Date.now() / 1000);
+                    // const elapsed = now - (onChainData?.last_action_timestamp || now);
+                    // const turn = gameState.turn === 'white' ? 'white' : 'black';
+                    // const remaining = (turn === 'white' ? gameState.whiteTimeSeconds : gameState.blackTimeSeconds) - elapsed;
 
                     // If we see a timeout locally in live mode, provide a hint to the user or allow the "Claim" button to appear?
                     // The claim button logic in the program is the final authority.
@@ -318,7 +310,7 @@ const IdiotChessPage: React.FC<IdiotChessPageProps> = ({ gameId: propGameId, mod
                     />
                     <GameOverOverlay
                         winner={gameState.winner}
-                        onReset={handleReset}
+                        onReturnToLobby={() => navigate('/idiot-chess-lobby')}
                         playerColor={isLive && onChainData && publicKey ?
                             (onChainData.playerBlack === publicKey.toString() ? 'black' : 'white') :
                             'white'}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Swords, Grip, Trees, PlayCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../theme';
-import { ConstructionBanner } from '../components';
+import { ConstructionBanner, BanyanLogo } from '../components';
 
 interface GameCardProps {
   title: string;
@@ -82,40 +82,24 @@ export default function LandingPage() {
     }}>
       <ConstructionBanner />
 
-      {/* Hero Section */}
+      {/* Hero Branding */}
       <div style={{ textAlign: 'center' }}>
-        <img
-          src="/logo.svg"
-          alt="Skrim Logo"
-          style={{
-            maxWidth: '100%',
-            height: 'auto',
-            maxHeight: '120px',
-            marginBottom: '2rem',
-            filter: 'drop-shadow(0 0 20px rgba(153, 69, 255, 0.3))'
-          }}
-        />
-        <h1 style={{
-          fontSize: '3.5rem',
-          fontWeight: '900',
-          marginBottom: '1rem',
-          background: `linear-gradient(135deg, ${theme.colors.primary.main}, ${theme.colors.secondary.main})`,
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          letterSpacing: '-0.03em',
-          textTransform: 'uppercase'
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '1.5rem',
+          marginBottom: '2rem',
+          color: theme.colors.text.primary
         }}>
-          {t('landing.hero.title')}
-        </h1>
-        <p style={{
-          fontSize: '1.25rem',
-          color: theme.colors.text.secondary,
-          maxWidth: '600px',
-          margin: '0 auto',
-          lineHeight: '1.6'
-        }}>
-          {t('landing.hero.subtitle')}
-        </p>
+          <BanyanLogo size={80} />
+          <span style={{
+            fontSize: '5rem',
+            fontWeight: '900',
+            letterSpacing: '-0.05em',
+            lineHeight: 1
+          }}>SKRIM</span>
+        </div>
       </div>
 
       {/* Games Grid */}

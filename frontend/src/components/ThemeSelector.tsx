@@ -14,64 +14,44 @@ const ThemeSelector: React.FC = () => {
 
     return (
         <div style={{
-            padding: '0.5rem',
+            padding: '0.25rem 0.5rem',
             backgroundColor: themeConfig.colors.card,
-            borderRadius: '6px',
-            border: `1px solid ${themeConfig.colors.border}`
+            borderRadius: '8px',
+            border: `1px solid ${themeConfig.colors.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
         }}>
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr 1fr',
-                gap: '0.4rem'
-            }}>
-                {themes.map((themeOption) => {
-                    const { Icon } = themeOption;
-                    return (
-                        <button
-                            key={themeOption.value}
-                            onClick={() => setTheme(themeOption.value)}
-                            title={themeOption.label}
-                            style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                padding: '0.5rem 0.25rem',
-                                fontSize: '0.7rem',
-                                backgroundColor: theme === themeOption.value
-                                    ? themeConfig.colors.primary.main
-                                    : themeConfig.colors.surface,
-                                color: theme === themeOption.value
-                                    ? 'white'
-                                    : themeConfig.colors.text.primary,
-                                border: `1px solid ${theme === themeOption.value
-                                    ? themeConfig.colors.primary.main
-                                    : themeConfig.colors.border}`,
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                margin: 0
-                            }}
-                            onMouseEnter={(e) => {
-                                if (theme !== themeOption.value) {
-                                    e.currentTarget.style.backgroundColor = themeConfig.colors.tertiary;
-                                    e.currentTarget.style.borderColor = themeConfig.colors.primary.main;
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (theme !== themeOption.value) {
-                                    e.currentTarget.style.backgroundColor = themeConfig.colors.surface;
-                                    e.currentTarget.style.borderColor = themeConfig.colors.border;
-                                }
-                            }}
-                        >
-                            <Icon size={14} />
-                            <span style={{ fontSize: '0.65rem', fontWeight: '500', marginTop: '0.2rem' }}>
-                                {themeOption.label}
-                            </span>
-                        </button>
-                    );
-                })}
+            <div style={{ color: themeConfig.colors.text.secondary, display: 'flex', alignItems: 'center' }}>
+                {theme === 'light' && <Sun size={16} />}
+                {theme === 'dark' && <Moon size={16} />}
+                {theme === 'system' && <Monitor size={16} />}
             </div>
+            <select
+                value={theme}
+                onChange={(e) => setTheme(e.target.value as ThemeMode)}
+                style={{
+                    flex: 1,
+                    padding: '0.4rem',
+                    fontSize: '0.85rem',
+                    backgroundColor: 'transparent',
+                    color: themeConfig.colors.text.primary,
+                    border: 'none',
+                    outline: 'none',
+                    cursor: 'pointer',
+                    fontWeight: '500'
+                }}
+            >
+                {themes.map((themeOption) => (
+                    <option
+                        key={themeOption.value}
+                        value={themeOption.value}
+                        style={{ backgroundColor: themeConfig.colors.card, color: themeConfig.colors.text.primary }}
+                    >
+                        {themeOption.label}
+                    </option>
+                ))}
+            </select>
         </div>
     );
 };

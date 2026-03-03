@@ -37,10 +37,6 @@
         }
     },
     "landing": {
-        "hero": {
-            "title": "Welcome to Skrim",
-            "subtitle": "Peer-to-peer gaming"
-        },
         "games": {
             "rps": {
                 "title": "Rock Paper Scissors",
@@ -97,7 +93,7 @@
             "developer": {
                 "title": "About the Developer",
                 "intro": "Hello, I'm Will",
-                "bio": "I've been engineering at early-stage SaaS startups for ~5 years, before that I was at larger companies like Google and US DoD.\n\nI've been partcipating in Crypto stuff since I found Solana in 2020. Most of it is extermely scammy but the core tech (see above about not wanting your email) is pretty cool.",
+                "bio": "I've been engineering at early-stage SaaS startups for ~5 years, before that I was at larger companies like Google and US DoD.\n\nI've been partcipating in Crypto stuff since I found Solana in 2020. Despite the prevelance of bologna in the crypto world, the core tech (see above about not wanting your email) is pretty cool.",
                 "skills_title": "Skills",
                 "skills_list": [
                     "Frontend / Backend / Infra",
@@ -135,7 +131,10 @@
             "no_challenges": "No open challenges found. Create one to start playing!",
             "accept_challenge": "Accept Challenge",
             "your_challenge": "Your Challenge",
-            "reveal_view": "Reveal / View"
+            "reveal_view": "Reveal / View",
+            "view": "View",
+            "reveal": "Reveal",
+            "claim": "Claim"
         },
         "create_modal": {
             "title": "Create Challenge",
@@ -287,7 +286,8 @@
             "status_label": "Status",
             "distributed": "Distributed",
             "locked": "Locked in Escrow",
-            "opponent_addr": "Opponent Address"
+            "opponent_addr": "Opponent Address",
+            "return_to_lobby": "Return to Lobby"
         },
         "toasts": {
             "creating": "Creating chess challenge...",

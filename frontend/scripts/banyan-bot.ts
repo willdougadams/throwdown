@@ -5,7 +5,6 @@ import { keccak_256 } from 'js-sha3';
 import { GAME_RULES } from '../src/config/gameRules';
 
 // --- Configuration ---
-const RPC_URL = "http://127.0.0.1:8899";
 const ID_FILE = path.join(__dirname, '../../scripts/program-ids.json');
 
 // --- Types ---
@@ -34,31 +33,59 @@ interface BudAccount {
 // --- Main Bot Logic ---
 
 async function main() {
-    console.log("🤖 Banyan Bot Starting...");
+    const network = process.argv[2] || 'localnet';
+    console.log(`🤖 Banyan Bot Starting on ${network}...`);
 
-    // 1. Setup Connection & Wallet
-    const connection = new Connection(RPC_URL, "confirmed");
-    const payer = Keypair.generate();
-    console.log(`🔑 Generated temporary wallet: ${payer.publicKey.toString()}`);
+    // 1. Setup Connection
+    let rpcUrl = "http://127.0.0.1:8899";
+    if (network === 'devnet') {
+        rpcUrl = 'https://api.devnet.solana.com';
+    } else if (network === 'mainnet') {
+        rpcUrl = 'https://api.mainnet-beta.solana.com';
+    }
+    const connection = new Connection(rpcUrl, "confirmed");
 
-    try {
-        console.log("💧 Airdropping SOL...");
-        const sig = await connection.requestAirdrop(payer.publicKey, 1_000_000_000); // 1 SOL
-        await connection.confirmTransaction(sig);
-        console.log("✅ Airdrop complete.");
-    } catch (e) {
-        console.error("❌ Airdrop failed. Is the validator running?");
-        process.exit(1);
+    // 2. Setup Wallet
+    const home = process.env.HOME || process.env.USERPROFILE;
+    const keyPath = path.join(home!, '.config/solana/id.json');
+    let payer: Keypair;
+
+    if (fs.existsSync(keyPath)) {
+        const keyData = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+        payer = Keypair.fromSecretKey(new Uint8Array(keyData));
+        console.log(`🔑 Using existing wallet: ${payer.publicKey.toString()}`);
+    } else {
+        payer = Keypair.generate();
+        console.log(`🔑 Generated temporary wallet: ${payer.publicKey.toString()}`);
+        if (network === 'localnet') {
+            try {
+                console.log("💧 Airdropping SOL...");
+                const sig = await connection.requestAirdrop(payer.publicKey, 1_000_000_000); // 1 SOL
+                await connection.confirmTransaction(sig);
+                console.log("✅ Airdrop complete.");
+            } catch (e) {
+                console.error("❌ Airdrop failed. Is the validator running?");
+                process.exit(1);
+            }
+        } else {
+            console.error("❌ No local wallet found and not on localnet. Please provide a wallet at ~/.config/solana/id.json");
+            process.exit(1);
+        }
     }
 
-    // 2. Load Program ID
+    // 3. Load Program ID
     if (!fs.existsSync(ID_FILE)) {
         console.error(`❌ Program ID file not found at ${ID_FILE}`);
         process.exit(1);
     }
     const ids = JSON.parse(fs.readFileSync(ID_FILE, 'utf8'));
-    const localnet = ids.localnet;
-    const programIdStr = typeof localnet === 'string' ? localnet : localnet.banyan;
+    const netData = ids[network];
+    const programIdStr = typeof netData === 'string' ? netData : netData?.banyan;
+
+    if (!programIdStr) {
+        console.error(`❌ No ${network} account found in ID file.`);
+        process.exit(1);
+    }
     const PROGRAM_ID = new PublicKey(programIdStr);
     console.log(`📜 Program ID: ${PROGRAM_ID.toString()}`);
 

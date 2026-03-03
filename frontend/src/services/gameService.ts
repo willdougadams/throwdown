@@ -1,5 +1,5 @@
 import { Connection, PublicKey } from '@solana/web3.js';
-import { getProgramId, getCurrentNetwork } from '../config/programIds';
+import { getProgramId } from '../config/programIds';
 import { GameAccountDeserializer, WaitingAccountDeserializer, ChessGameAccountDeserializer } from './transactionPacker';
 
 interface GameIndexEntry {
@@ -17,6 +17,7 @@ interface GameIndexEntry {
     total_rounds?: number;
     winner?: string;
     player_addresses: string[];
+    lamports: number;
 }
 
 export class GameService {
@@ -81,6 +82,7 @@ export class GameService {
                             total_rounds: gameData.total_rounds,
                             winner: winner,
                             player_addresses: gameData.players.map((p: any) => p.pubkey),
+                            lamports: account.lamports,
                         };
 
                         games.push(gameEntry);
@@ -159,6 +161,7 @@ export class GameService {
         creator: string;
         prizePool: number;
         winner?: string;
+        lamports: number;
     }>> {
         const games = await this.fetchAllGames(programType);
 
@@ -173,7 +176,8 @@ export class GameService {
             buyInSOL: Number(game.buy_in_lamports) / 1_000_000_000,
             creator: game.creator,
             prizePool: (Number(game.buy_in_lamports) / 1_000_000_000) * game.max_players,
-            winner: game.winner
+            winner: game.winner,
+            lamports: game.lamports
         }));
     }
 

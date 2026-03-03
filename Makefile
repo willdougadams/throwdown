@@ -130,7 +130,7 @@ init-banyan:
 	@cd frontend && npx tsx scripts/init-banyan.ts $(NETWORK)
 
 banyan-bot:
-	@echo "🤖 Starting Banyan Bot..."
-	@cd frontend && npx tsx scripts/banyan-bot.ts
+	@echo "🤖 Starting Banyan Bot on $(NETWORK)..."
+	@cd frontend && npx tsx scripts/banyan-bot.ts $(NETWORK)
 
 	

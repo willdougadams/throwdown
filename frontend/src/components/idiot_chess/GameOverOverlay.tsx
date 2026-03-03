@@ -1,12 +1,12 @@
-
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { theme } from '../../theme';
 import { GameState, Position, IdiotChessEngine, BOARD_SIZE, Piece as PieceType, Player } from './GameEngine';
 
 interface GameOverOverlayProps {
     winner: Player | 'draw' | null;
-    onReset: () => void;
+    onReturnToLobby: () => void;
     playerColor: Player;
 }
 
@@ -110,7 +110,8 @@ const Raincloud: React.FC = () => {
     );
 };
 
-const GameOverOverlay: React.FC<GameOverOverlayProps> = ({ winner, onReset, playerColor }) => {
+const GameOverOverlay: React.FC<GameOverOverlayProps> = ({ winner, onReturnToLobby, playerColor }) => {
+    const { t } = useTranslation();
     const isWin = winner === playerColor;
     const isDraw = winner === 'draw';
 
@@ -151,12 +152,12 @@ const GameOverOverlay: React.FC<GameOverOverlayProps> = ({ winner, onReset, play
                                 letterSpacing: '2px'
                             }}
                         >
-                            {isWin ? 'YOU WIN!' : (isDraw ? 'STALEMATE' : 'YOU LOSE')}
+                            {isWin ? t('chess.game.you_win') || 'YOU WIN!' : (isDraw ? t('chess.game.stalemate') || 'STALEMATE' : t('chess.game.you_lose') || 'YOU LOSE')}
                         </motion.h2>
                         <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            onClick={onReset}
+                            onClick={onReturnToLobby}
                             style={{
                                 padding: '1rem 2rem',
                                 fontSize: '1.2rem',
@@ -170,7 +171,7 @@ const GameOverOverlay: React.FC<GameOverOverlayProps> = ({ winner, onReset, play
                                 transition: 'background-color 0.2s'
                             }}
                         >
-                            New Game
+                            {t('chess.game.return_to_lobby')}
                         </motion.button>
                     </motion.div>
                 </>

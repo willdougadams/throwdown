@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { createWeb3ProgramClient } from '../services/web3ProgramClient';
 import { GameService } from '../services/gameService';
-import { Swords, Grip, Timer, Users, Search, X, Circle, FileText, Scissors, Zap, Wind, Sparkles } from 'lucide-react';
+import { Swords, Zap, Wind, Sparkles, X, Circle, FileText, Scissors } from 'lucide-react';
 import { theme } from '../theme';
 import { useToast } from '../contexts/ToastContext';
-import { useGames } from '../contexts/GamesContext';
 
 
 // NewGameConfig removed
@@ -18,9 +17,10 @@ interface Challenge {
   creator: string;
   name: string;
   buyInSOL: number;
-  state: string;
-  status: 'waiting' | 'in_progress' | 'completed';
   players: string[];
+  status: 'waiting' | 'in_progress' | 'completed';
+  winner?: string;
+  lamports: number;
 }
 
 function CreateChallengeModal({ isOpen, onClose, onCreate }: {
@@ -51,7 +51,7 @@ function CreateChallengeModal({ isOpen, onClose, onCreate }: {
       <div style={{
         backgroundColor: theme.colors.surface, padding: '2rem',
         borderRadius: '16px', maxWidth: '500px', width: '100%',
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)', border: `1px solid ${theme.colors.border}`
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)', border: `1px solid ${theme.colors.border} `
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
           <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('rps.create_modal.title')}</h2>
@@ -67,7 +67,7 @@ function CreateChallengeModal({ isOpen, onClose, onCreate }: {
               onChange={e => setEntryFee(parseFloat(e.target.value))}
               style={{
                 width: '100%', padding: '1rem', borderRadius: '8px',
-                backgroundColor: theme.colors.background, border: `1px solid ${theme.colors.border}`,
+                backgroundColor: theme.colors.background, border: `1px solid ${theme.colors.border} `,
                 color: theme.colors.text.primary, fontSize: '1.1rem', marginBottom: '2rem'
               }}
             />
@@ -109,7 +109,7 @@ function CreateChallengeModal({ isOpen, onClose, onCreate }: {
                     style={{
                       aspectRatio: '1', display: 'flex', flexDirection: 'column',
                       alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                      borderRadius: '12px', border: `2px solid ${theme.colors.border}`,
+                      borderRadius: '12px', border: `2px solid ${theme.colors.border} `,
                       backgroundColor: theme.colors.background, color: theme.colors.text.primary,
                       cursor: moves.length < 5 ? 'pointer' : 'not-allowed',
                       fontSize: '0.8rem', fontWeight: 'bold'
@@ -139,21 +139,21 @@ function CreateChallengeModal({ isOpen, onClose, onCreate }: {
                     style={{
                       aspectRatio: '1', display: 'flex', flexDirection: 'column',
                       alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                      borderRadius: '12px', border: `2px solid ${theme.colors.border}`,
+                      borderRadius: '12px', border: `2px solid ${theme.colors.border} `,
                       backgroundColor: theme.colors.background, color: theme.colors.text.primary,
                       cursor: moves.length < 5 ? 'pointer' : 'not-allowed',
                       fontSize: '0.8rem', fontWeight: 'bold'
                     }}
                   >
                     <Icon size={24} fill={s === 'fury' ? 'currentColor' : 'none'} />
-                    {t(`rps.game.moves.${s}`)}
+                    {t(`rps.game.moves.${s} `)}
                   </button>
                 );
               })}
             </div>
 
             <div style={{ display: 'flex', gap: '1rem' }}>
-              <button onClick={() => setStep('config')} style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border}`, background: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }}>{t('rps.create_modal.back')}</button>
+              <button onClick={() => setStep('config')} style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border} `, background: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }}>{t('rps.create_modal.back')}</button>
               <button
                 onClick={() => onCreate(entryFee, moves)}
                 disabled={moves.length < 5}
@@ -200,7 +200,7 @@ function AcceptChallengeModal({ isOpen, onClose, onAccept, challenge }: {
       <div style={{
         backgroundColor: theme.colors.surface, padding: '2rem',
         borderRadius: '16px', maxWidth: '500px', width: '100%',
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)', border: `1px solid ${theme.colors.border}`
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)', border: `1px solid ${theme.colors.border} `
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
           <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('rps.accept_modal.title')}</h2>
@@ -237,7 +237,7 @@ function AcceptChallengeModal({ isOpen, onClose, onAccept, challenge }: {
                 style={{
                   aspectRatio: '1', display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                  borderRadius: '12px', border: `2px solid ${theme.colors.border}`,
+                  borderRadius: '12px', border: `2px solid ${theme.colors.border} `,
                   backgroundColor: theme.colors.background, color: theme.colors.text.primary,
                   cursor: moves.length < 5 ? 'pointer' : 'not-allowed',
                   fontSize: '0.8rem', fontWeight: 'bold'
@@ -267,14 +267,14 @@ function AcceptChallengeModal({ isOpen, onClose, onAccept, challenge }: {
                 style={{
                   aspectRatio: '1', display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                  borderRadius: '12px', border: `2px solid ${theme.colors.border}`,
+                  borderRadius: '12px', border: `2px solid ${theme.colors.border} `,
                   backgroundColor: theme.colors.background, color: theme.colors.text.primary,
                   cursor: moves.length < 5 ? 'pointer' : 'not-allowed',
                   fontSize: '0.8rem', fontWeight: 'bold'
                 }}
               >
                 <Icon size={24} fill={s === 'fury' ? 'currentColor' : 'none'} />
-                {t(`rps.game.moves.${s}`)}
+                {t(`rps.game.moves.${s} `)}
               </button>
             );
           })}
@@ -303,30 +303,24 @@ export default function RPSLobbyPage() {
   const wallet = useWallet();
   const { showToast, updateToast } = useToast();
   const navigate = useNavigate();
-  const location = useLocation();
   const { t } = useTranslation();
 
   const [challenges, setChallenges] = useState<Challenge[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [acceptingChallenge, setAcceptingChallenge] = useState<Challenge | null>(null);
 
   const refreshChallenges = useCallback(async () => {
-    setIsRefreshing(true);
     try {
       const rpsService = new GameService(connection);
       const allGames = await rpsService.getFormattedGamesForLobby();
-      // Filter for open challenges OR challenges I am part of
       setChallenges(allGames.filter(g =>
         g.status === 'waiting' ||
-        (g.status === 'in_progress' && publicKey && g.players.includes(publicKey.toString()))
+        (publicKey && g.players.includes(publicKey.toString()))
       ) as any);
     } catch (e) {
       console.error('Failed to refresh challenges:', e);
-    } finally {
-      setIsRefreshing(false);
     }
-  }, [connection]);
+  }, [connection, publicKey]);
 
   useEffect(() => {
     refreshChallenges();
@@ -412,7 +406,7 @@ export default function RPSLobbyPage() {
         padding: '1rem',
         backgroundColor: theme.colors.surface,
         borderRadius: '12px',
-        border: `1px solid ${theme.colors.border}`
+        border: `1px solid ${theme.colors.border} `
       }}>
         <div>
           <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: theme.colors.text.primary, fontSize: isMobile ? '1.5rem' : '2rem', margin: 0 }}>
@@ -426,7 +420,7 @@ export default function RPSLobbyPage() {
       </div>
 
       <div style={{
-        padding: '1rem', backgroundColor: theme.colors.surface, borderRadius: '12px', border: `1px solid ${theme.colors.border}`
+        padding: '1rem', backgroundColor: theme.colors.surface, borderRadius: '12px', border: `1px solid ${theme.colors.border} `
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('rps.lobby.open_challenges')}</h2>
@@ -450,7 +444,7 @@ export default function RPSLobbyPage() {
             {challenges.map(c => (
               <div key={c.id} style={{
                 padding: '1.5rem', borderRadius: '12px', backgroundColor: theme.colors.background,
-                border: `1px solid ${theme.colors.border}`, display: 'flex', flexDirection: 'column', gap: '1rem'
+                border: `1px solid ${theme.colors.border} `, display: 'flex', flexDirection: 'column', gap: '1rem'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: theme.colors.primary.main, fontWeight: 'bold' }}>{t('common.sol_match', { fee: c.buyInSOL })}</span>
@@ -458,25 +452,46 @@ export default function RPSLobbyPage() {
                 </div>
                 <button
                   onClick={() => {
-                    const isParticipant = publicKey && c.players.includes(publicKey.toString());
-                    if (isParticipant) {
-                      navigate(`/game/${c.id}`);
-                    } else {
+                    const isCreator = publicKey && c.creator === publicKey.toString();
+                    const isWinner = publicKey && c.winner === publicKey.toString();
+                    const isUnclaimed = c.lamports > 1000000; // ~0.001 SOL threshold for rent+prize
+
+                    if (c.status === 'waiting' && !isCreator) {
                       setAcceptingChallenge(c);
+                    } else if (c.status === 'in_progress' && isCreator) {
+                      navigate(`/game/${c.id}`);
+                    } else if (c.status === 'completed' && isWinner && isUnclaimed) {
+                      navigate(`/game/${c.id}`); // Game page handles claiming
+                    } else {
+                      navigate(`/game/${c.id}`);
                     }
                   }}
                   style={{
                     padding: '0.8rem',
-                    backgroundColor: (publicKey && c.players.includes(publicKey.toString()))
-                      ? theme.colors.primary.main
-                      : theme.colors.success,
+                    backgroundColor: (() => {
+                      const isCreator = publicKey && c.creator === publicKey.toString();
+                      const isWinner = publicKey && c.winner === publicKey.toString();
+                      const isUnclaimed = c.lamports > 1000000;
+
+                      if (c.status === 'waiting' && !isCreator) return theme.colors.success;
+                      if (c.status === 'in_progress' && isCreator) return theme.colors.primary.main;
+                      if (c.status === 'completed' && isWinner && isUnclaimed) return '#d4af37'; // Gold for Claim
+                      return theme.colors.text.secondary; // Gray for View
+                    })(),
                     color: 'white', border: 'none', borderRadius: '8px',
                     cursor: 'pointer', fontWeight: 'bold'
                   }}
                 >
-                  {(publicKey && c.players.includes(publicKey.toString()))
-                    ? (c.status === 'in_progress' ? t('rps.lobby.reveal_view') : t('rps.lobby.your_challenge'))
-                    : t('rps.lobby.accept_challenge')}
+                  {(() => {
+                    const isCreator = publicKey && c.creator === publicKey.toString();
+                    const isWinner = publicKey && c.winner === publicKey.toString();
+                    const isUnclaimed = c.lamports > 1000000;
+
+                    if (c.status === 'waiting' && !isCreator) return t('rps.lobby.accept_challenge');
+                    if (c.status === 'in_progress' && isCreator) return t('rps.lobby.reveal');
+                    if (c.status === 'completed' && isWinner && isUnclaimed) return t('rps.lobby.claim');
+                    return t('rps.lobby.view');
+                  })()}
                 </button>
               </div>
             ))}

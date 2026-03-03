@@ -1,10 +1,8 @@
 import {
   TransactionPacker,
   Move,
-  GameState,
   InstructionType,
   MAX_PLAYERS,
-  MAX_ROUNDS,
   AccountSizeCalculator,
 } from './transactionPacker';
 
@@ -12,7 +10,6 @@ describe('TransactionPacker', () => {
   describe('Constants', () => {
     test('should have correct max values', () => {
       expect(MAX_PLAYERS).toBe(2);
-      expect(MAX_ROUNDS).toBe(1);
     });
   });
 
@@ -21,64 +18,61 @@ describe('TransactionPacker', () => {
       expect(Move.Rock).toBe(0);
       expect(Move.Paper).toBe(1);
       expect(Move.Scissors).toBe(2);
-    });
-
-    test('GameState enum should have correct values', () => {
-      expect(GameState.WaitingForPlayers).toBe(0);
-      expect(GameState.InProgress).toBe(1);
-      expect(GameState.Finished).toBe(2);
+      expect(Move.Fury).toBe(3);
+      expect(Move.Serenity).toBe(4);
+      expect(Move.Trickery).toBe(5);
     });
 
     test('InstructionType enum should have correct discriminators', () => {
-      expect(InstructionType.CreateGame).toBe(0);
-      expect(InstructionType.JoinGame).toBe(1);
-      expect(InstructionType.SubmitMoves).toBe(2);
-      expect(InstructionType.RevealMoves).toBe(3);
-      expect(InstructionType.ClaimPrize).toBe(4);
+      expect(InstructionType.CreateChallenge).toBe(0);
+      expect(InstructionType.AcceptChallenge).toBe(1);
+      expect(InstructionType.RevealMoves).toBe(2);
+      expect(InstructionType.ClaimPrize).toBe(3);
     });
   });
 
-  describe('packCreateGame', () => {
-    test('should pack CreateGame instruction correctly', () => {
+  describe('packCreateChallenge', () => {
+    test('should pack CreateChallenge instruction correctly', () => {
       const buyInLamports = BigInt('100000000'); // 0.1 SOL
+      const movesHash = new Uint8Array(32).fill(1);
+      const name = 'Test Game';
 
-      const result = TransactionPacker.packCreateGame(buyInLamports, 'Test Game', 'Test Desc');
+      const result = TransactionPacker.packCreateChallenge(buyInLamports, movesHash, name);
 
-      // Format: discriminator + buy_in + name_len + name + desc_len + desc
-      // 1 + 8 + 1 + 9 + 1 + 9 = 29
-      expect(result.length).toBe(29);
-      expect(result[0]).toBe(InstructionType.CreateGame);
+      // Format: [disc: u8][buy_in: u64][hash: [u8; 32]][name_len: u8][name: [u8; name_len]]
+      // 1 + 8 + 32 + 1 + 9 = 51
+      expect(result.length).toBe(51);
+      expect(result[0]).toBe(InstructionType.CreateChallenge);
 
       const view = new DataView(result.buffer);
       expect(view.getBigUint64(1, true)).toBe(buyInLamports);
-      expect(result[9]).toBe(9); // name_len
-    });
-
-    test('should handle empty strings', () => {
-      const result = TransactionPacker.packCreateGame(BigInt('1000000'), '', '');
-      expect(result.length).toBe(11); // 1 + 8 + 1 + 0 + 1 + 0
+      expect(result.slice(9, 41)).toEqual(movesHash);
+      expect(result[41]).toBe(9); // name_len
     });
   });
 
-  describe('packJoinGame', () => {
-    test('should pack JoinGame instruction correctly', () => {
-      const playerSlot = 0;
-      const result = TransactionPacker.packJoinGame(playerSlot);
+  describe('packAcceptChallenge', () => {
+    test('should pack AcceptChallenge instruction correctly', () => {
+      const moves = [Move.Rock, Move.Paper, Move.Scissors, Move.Fury, Move.Serenity];
+      const result = TransactionPacker.packAcceptChallenge(moves);
 
-      expect(result.length).toBe(2);
-      expect(result[0]).toBe(InstructionType.JoinGame);
-      expect(result[1]).toBe(playerSlot);
+      // 1 (disc) + 5 (moves) = 6
+      expect(result.length).toBe(6);
+      expect(result[0]).toBe(InstructionType.AcceptChallenge);
+      expect(result[1]).toBe(Move.Rock);
+      expect(result[5]).toBe(Move.Serenity);
     });
   });
 
   describe('packRevealMoves', () => {
     test('should pack RevealMoves instruction correctly', () => {
-      const moves = [Move.Rock, Move.Paper, Move.Scissors, Move.Rock, Move.Paper];
+      const moves = [Move.Rock, Move.Paper, Move.Scissors, Move.Fury, Move.Serenity];
       const salt = BigInt('9876543210');
 
       const result = TransactionPacker.packRevealMoves(moves, salt);
 
-      expect(result.length).toBe(14); // 1 + 5 + 8
+      // 1 (disc) + 5 (moves) + 8 (salt) = 14
+      expect(result.length).toBe(14);
       expect(result[0]).toBe(InstructionType.RevealMoves);
 
       const view = new DataView(result.buffer);
@@ -88,7 +82,7 @@ describe('TransactionPacker', () => {
 
   describe('hashMoves', () => {
     test('should produce consistent hashes', () => {
-      const moves = [Move.Rock, Move.Paper, Move.Scissors, Move.Rock, Move.Paper];
+      const moves = [Move.Rock, Move.Paper, Move.Scissors, Move.Fury, Move.Serenity];
       const salt = BigInt('123456789');
 
       const hash1 = TransactionPacker.hashMoves(moves, salt);
@@ -102,7 +96,9 @@ describe('TransactionPacker', () => {
   describe('AccountSizeCalculator', () => {
     test('should calculate correct game account size', () => {
       const size = AccountSizeCalculator.calculateGameAccountSize();
-      // Expected size: 384 (metadata) + 2 * 72 (players) = 528
+      // baseSize = 32 + 64 + 256 + 1 + 1 + 1 + 5 + 8 + 8 + 8 = 384
+      // playersSize = 2 * (32 + 32 + 5 + 1 + 2) = 2 * 72 = 144
+      // total = 384 + 144 = 528
       expect(size).toBe(528);
     });
   });

@@ -328,14 +328,14 @@ pub fn process_instruction(
                         let authority_info = next_account_info(account_iter)?;
 
                         if platform_fee > 0 {
-                            **manager_info.try_borrow_mut_lamports()? -= platform_fee;
-                            **authority_info.try_borrow_mut_lamports()? += platform_fee;
+                            *manager_info.try_borrow_mut_lamports()? -= platform_fee;
+                            *authority_info.try_borrow_mut_lamports()? += platform_fee;
                             msg!("Platform fee of {} paid to authority", platform_fee);
                         }
 
                         if nurturer_payout > 0 {
-                            **manager_info.try_borrow_mut_lamports()? -= nurturer_payout;
-                            **nurturer.try_borrow_mut_lamports()? += nurturer_payout;
+                            *manager_info.try_borrow_mut_lamports()? -= nurturer_payout;
+                            *nurturer.try_borrow_mut_lamports()? += nurturer_payout;
                             msg!("Nurturer payout: {}", nurturer_payout);
                         }
                     }

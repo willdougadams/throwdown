@@ -308,9 +308,9 @@ pub fn create_move_hash(moves: &[Move; 5], salt: u64) -> [u8; 32] {
     }
     input[5..13].copy_from_slice(&salt.to_le_bytes());
 
-    for i in 0..input.len() {
+    for (i, val) in input.iter().enumerate() {
         let pos = i % 32;
-        hash[pos] = hash[pos].wrapping_add(input[i]).wrapping_mul(7).wrapping_add(i as u8);
+        hash[pos] = ((hash[pos] as u16 + *val as u16) * 7 + i as u16) as u8;
     }
     for i in 0..32 {
         let next = (i + 1) % 32;
