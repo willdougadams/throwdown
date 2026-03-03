@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { MatchupTile } from './MatchupTile';
 import { Trophy } from 'lucide-react';
 import { theme } from '../theme';
@@ -35,6 +36,7 @@ export function MatchupDisplay({
     onClaimPrize,
     gameAccountBalance
 }: MatchupDisplayProps) {
+    const { t } = useTranslation();
 
     // Helper to extract moves (now only one set of moves since MAX_ROUNDS = 1)
     const getPlayerMoves = (playerPubkey: string): Move[] | undefined => {
@@ -192,7 +194,7 @@ export function MatchupDisplay({
                         fontSize: theme.fontSize.lg
                     }}>
                         <Trophy size={24} fill="#ffd700" />
-                        MATCH WINNER
+                        {t('rps.game.match_winner')}
                     </div>
                     <div style={{
                         fontSize: theme.fontSize['2xl'],
@@ -200,7 +202,7 @@ export function MatchupDisplay({
                         color: theme.colors.text.primary,
                         marginBottom: theme.spacing.sm
                     }}>
-                        {gameData.winner.nickname || 'Player'}
+                        {gameData.winner.nickname || t('rps.game.player_label')}
                     </div>
                     <div style={{
                         fontSize: theme.fontSize.sm,
@@ -222,7 +224,7 @@ export function MatchupDisplay({
                                     color: theme.colors.success,
                                     fontWeight: 'bold'
                                 }}>
-                                    Prize Claimed: {prizeAmountSOL.toFixed(4)} SOL
+                                    {t('rps.game.prize_claimed_sol', { amount: prizeAmountSOL.toFixed(4) })}
                                 </div>
                             ) : (
                                 <button
@@ -239,7 +241,7 @@ export function MatchupDisplay({
                                         width: '100%'
                                     }}
                                 >
-                                    Claim Prize ({prizeAmountSOL.toFixed(4)} SOL)
+                                    {t('rps.game.claim_prize_sol', { amount: prizeAmountSOL.toFixed(4) })}
                                 </button>
                             )}
                         </div>

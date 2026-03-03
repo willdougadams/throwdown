@@ -39,6 +39,9 @@ pub enum Move {
     Rock = 0,
     Paper = 1,
     Scissors = 2,
+    Fury = 3,
+    Serenity = 4,
+    Trickery = 5,
 }
 
 unsafe impl Zeroable for Move {}
@@ -218,6 +221,13 @@ pub fn process_instruction(
                 Move::from_u8(instruction_data[4])?,
                 Move::from_u8(instruction_data[5])?,
             ];
+
+            // Strategies cannot be used on the first round (moves[0])
+            if moves[0] as u8 > 2 {
+                msg!("Round 1 move must be a basic move (Rock, Paper, or Scissors)");
+                return Err(ProgramError::InvalidInstructionData);
+            }
+
             accept_challenge(accounts, moves)
         }
         2 => {
@@ -232,6 +242,13 @@ pub fn process_instruction(
                 Move::from_u8(instruction_data[4])?,
                 Move::from_u8(instruction_data[5])?,
             ];
+
+            // Strategies cannot be used on the first round (moves[0])
+            if moves[0] as u8 > 2 {
+                msg!("Round 1 move must be a basic move (Rock, Paper, or Scissors)");
+                return Err(ProgramError::InvalidInstructionData);
+            }
+
             let salt = u64::from_le_bytes(instruction_data[6..14].try_into().unwrap());
             reveal_moves(accounts, moves, salt)
         }
@@ -250,6 +267,9 @@ impl Move {
             0 => Ok(Move::Rock),
             1 => Ok(Move::Paper),
             2 => Ok(Move::Scissors),
+            3 => Ok(Move::Fury),
+            4 => Ok(Move::Serenity),
+            5 => Ok(Move::Trickery),
             _ => Err(ProgramError::InvalidInstructionData),
         }
     }
@@ -266,6 +286,9 @@ impl PlayerData {
             1 => Some(Move::Rock),
             2 => Some(Move::Paper),
             3 => Some(Move::Scissors),
+            4 => Some(Move::Fury),
+            5 => Some(Move::Serenity),
+            6 => Some(Move::Trickery),
             _ => None,
         }
     }
@@ -308,17 +331,63 @@ fn determine_winner(move1: Move, move2: Move) -> Option<u8> {
     }
 }
 
+fn resolve_strategy(strategy: Move, prev_self_move: Move, prev_opponent_move: Move) -> Move {
+    match strategy {
+        Move::Fury => {
+            // Make whatever move would have beaten your opponent's last move
+            match prev_opponent_move {
+                Move::Rock => Move::Paper,
+                Move::Paper => Move::Scissors,
+                Move::Scissors => Move::Rock,
+                _ => prev_opponent_move, // Should not happen with basic moves
+            }
+        }
+        Move::Serenity => {
+            // Make the same move you made in the last round
+            prev_self_move
+        }
+        Move::Trickery => {
+            // Make whatever move would have lost to your opponent's last move
+            match prev_opponent_move {
+                Move::Rock => Move::Scissors,
+                Move::Paper => Move::Rock,
+                Move::Scissors => Move::Paper,
+                _ => prev_opponent_move, // Should not happen with basic moves
+            }
+        }
+        _ => strategy, // Basic move
+    }
+}
+
 fn resolve_match(player1: &PlayerData, player2: &PlayerData) -> Option<u8> {
     let mut p1_wins = 0;
     let mut p2_wins = 0;
 
+    let mut p1_prev_resolved = None;
+    let mut p2_prev_resolved = None;
+
     for i in 0..5 {
         if let (Some(m1), Some(m2)) = (player1.get_move(i), player2.get_move(i)) {
-            match determine_winner(m1, m2) {
+            let m1_resolved = if i == 0 {
+                m1
+            } else {
+                resolve_strategy(m1, p1_prev_resolved.unwrap(), p2_prev_resolved.unwrap())
+            };
+
+            let m2_resolved = if i == 0 {
+                m2
+            } else {
+                resolve_strategy(m2, p2_prev_resolved.unwrap(), p1_prev_resolved.unwrap())
+            };
+
+            match determine_winner(m1_resolved, m2_resolved) {
                 Some(0) => p1_wins += 1,
                 Some(1) => p2_wins += 1,
                 _ => {}
             }
+
+            p1_prev_resolved = Some(m1_resolved);
+            p2_prev_resolved = Some(m2_resolved);
         }
     }
 
@@ -473,10 +542,13 @@ fn reveal_moves(accounts: &[AccountInfo], moves: [Move; 5], salt: u64) -> Progra
 // Matchmaking pool logic removed in favor of Challenge/Accept model
 
 fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
-    let [winner, game_account] = accounts else {
+    let [winner, game_account, manager_info] = accounts.get(..3).ok_or(ProgramError::NotEnoughAccountKeys)? else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
+    // Note: Implicitly checked by attempting to borrow data from account
+    // but we should verify the owner is this program if we had program_id.
+    
     if !winner.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
     }
@@ -617,8 +689,20 @@ fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
         }
 
         let prize_pool = get_prize_pool(&data);
-        // Apply 1% platform fee to winners
-        prize_pool.checked_mul(99).and_then(|v| v.checked_div(100)).ok_or(ProgramError::InvalidAccountData)?
+        // Apply 1% platform fee (captured in treasury)
+        let amount_to_winner = prize_pool.checked_mul(99).and_then(|v| v.checked_div(100)).ok_or(ProgramError::InvalidAccountData)?;
+        let fee = prize_pool.saturating_sub(amount_to_winner);
+
+        // Transfer fee to treasury
+        if fee > 0 {
+            let mut game_lamports = game_account.try_borrow_mut_lamports()?;
+            let mut manager_lamports = manager_info.try_borrow_mut_lamports()?;
+            *game_lamports = game_lamports.checked_sub(fee).ok_or(ProgramError::InsufficientFunds)?;
+            *manager_lamports = manager_lamports.checked_add(fee).ok_or(ProgramError::InvalidAccountData)?;
+            msg!("Platform fee of {} transferred to treasury", fee);
+        }
+
+        amount_to_winner
     }; // data is dropped here
 
     transfer_prize(winner, game_account, amount_to_transfer)

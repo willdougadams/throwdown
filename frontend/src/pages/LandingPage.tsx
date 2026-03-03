@@ -1,7 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Swords, Grip, Trees, PlayCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { theme } from '../theme';
+import { ConstructionBanner } from '../components';
 
 interface GameCardProps {
   title: string;
@@ -13,6 +15,7 @@ interface GameCardProps {
 
 const GameCard: React.FC<GameCardProps> = ({ title, description, icon, path, color }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <div
@@ -59,13 +62,15 @@ const GameCard: React.FC<GameCardProps> = ({ title, description, icon, path, col
         </p>
       </div>
       <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', color: color, fontWeight: 'bold', fontSize: '0.9rem' }}>
-        Play Now <PlayCircle size={16} />
+        {t('landing.play_now')} <PlayCircle size={16} />
       </div>
     </div>
   );
 };
 
 export default function LandingPage() {
+  const { t } = useTranslation();
+
   return (
     <div style={{
       maxWidth: '1000px',
@@ -75,18 +80,32 @@ export default function LandingPage() {
       flexDirection: 'column',
       gap: '3rem'
     }}>
+      <ConstructionBanner />
+
       {/* Hero Section */}
       <div style={{ textAlign: 'center' }}>
+        <img
+          src="/logo.svg"
+          alt="Skrim Logo"
+          style={{
+            maxWidth: '100%',
+            height: 'auto',
+            maxHeight: '120px',
+            marginBottom: '2rem',
+            filter: 'drop-shadow(0 0 20px rgba(153, 69, 255, 0.3))'
+          }}
+        />
         <h1 style={{
-          fontSize: '3rem',
-          fontWeight: '800',
+          fontSize: '3.5rem',
+          fontWeight: '900',
           marginBottom: '1rem',
           background: `linear-gradient(135deg, ${theme.colors.primary.main}, ${theme.colors.secondary.main})`,
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
-          letterSpacing: '-0.02em'
+          letterSpacing: '-0.03em',
+          textTransform: 'uppercase'
         }}>
-          Welcome to Skrim
+          {t('landing.hero.title')}
         </h1>
         <p style={{
           fontSize: '1.25rem',
@@ -95,7 +114,7 @@ export default function LandingPage() {
           margin: '0 auto',
           lineHeight: '1.6'
         }}>
-          The ultimate decentralized gaming arena on Solana. Compete, collaborate, and win prizes in our suite of on-chain games.
+          {t('landing.hero.subtitle')}
         </p>
       </div>
 
@@ -106,22 +125,22 @@ export default function LandingPage() {
         gap: '1.5rem'
       }}>
         <GameCard
-          title="Rock Paper Scissors"
-          description="1v1 RPS with SOL prizes. Join a match, commit your moves, and win the prize pool."
+          title={t('landing.games.rps.title')}
+          description={t('landing.games.rps.description')}
           icon={<Swords size={24} />}
           path="/rps-lobby"
           color={theme.colors.primary.main}
         />
         <GameCard
-          title="Idiot Chess"
-          description="Chaotic 5x5 chess on Solana. Play for SOL prizes in live on-chain matches or practice against our local AI."
+          title={t('landing.games.chess.title')}
+          description={t('landing.games.chess.description')}
           icon={<Grip size={24} />}
           path="/idiot-chess-lobby"
           color={theme.colors.secondary.main}
         />
         <GameCard
-          title="Great Banyan"
-          description="Collaborate with other players to grow a massive, persistent tree on the blockchain. Water, prune, and prosper."
+          title={t('landing.games.banyan.title')}
+          description={t('landing.games.banyan.description')}
           icon={<Trees size={24} />}
           path="/great-banyan"
           color="#10b981"
@@ -136,23 +155,23 @@ export default function LandingPage() {
         border: `1px solid ${theme.colors.border}`,
         textAlign: 'center'
       }}>
-        <h2 style={{ color: theme.colors.text.primary, marginBottom: '1.5rem' }}>Why Skrim?</h2>
+        <h2 style={{ color: theme.colors.text.primary, marginBottom: '1.5rem' }}>{t('landing.why_skrim.title')}</h2>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '2rem'
         }}>
           <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: theme.colors.primary.main, marginBottom: '0.5rem' }}>Fully On-Chain</div>
-            <p style={{ color: theme.colors.text.secondary, margin: 0, fontSize: '0.9rem' }}>All game logic and states are secured by Solana smart contracts.</p>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: theme.colors.primary.main, marginBottom: '0.5rem' }}>{t('landing.why_skrim.on_chain.title')}</div>
+            <p style={{ color: theme.colors.text.secondary, margin: 0, fontSize: '0.9rem' }}>{t('landing.why_skrim.on_chain.description')}</p>
           </div>
           <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: theme.colors.primary.main, marginBottom: '0.5rem' }}>Fair Play</div>
-            <p style={{ color: theme.colors.text.secondary, margin: 0, fontSize: '0.9rem' }}>Provably fair gaming using commit-reveal schemes and decentralized randomness.</p>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: theme.colors.primary.main, marginBottom: '0.5rem' }}>{t('landing.why_skrim.fair_play.title')}</div>
+            <p style={{ color: theme.colors.text.secondary, margin: 0, fontSize: '0.9rem' }}>{t('landing.why_skrim.fair_play.description')}</p>
           </div>
           <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: theme.colors.primary.main, marginBottom: '0.5rem' }}>Instant Payouts</div>
-            <p style={{ color: theme.colors.text.secondary, margin: 0, fontSize: '0.9rem' }}>Prizes are distributed automatically to winners via the blockchain.</p>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: theme.colors.primary.main, marginBottom: '0.5rem' }}>{t('landing.why_skrim.payouts.title')}</div>
+            <p style={{ color: theme.colors.text.secondary, margin: 0, fontSize: '0.9rem' }}>{t('landing.why_skrim.payouts.description')}</p>
           </div>
         </div>
       </div>

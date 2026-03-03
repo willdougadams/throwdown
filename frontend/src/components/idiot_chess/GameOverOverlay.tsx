@@ -2,11 +2,12 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { theme } from '../../theme';
-import { Player } from './GameEngine';
+import { GameState, Position, IdiotChessEngine, BOARD_SIZE, Piece as PieceType, Player } from './GameEngine';
 
 interface GameOverOverlayProps {
     winner: Player | 'draw' | null;
     onReset: () => void;
+    playerColor: Player;
 }
 
 const Confetti: React.FC = () => {
@@ -109,8 +110,8 @@ const Raincloud: React.FC = () => {
     );
 };
 
-const GameOverOverlay: React.FC<GameOverOverlayProps> = ({ winner, onReset }) => {
-    const isWin = winner === 'white';
+const GameOverOverlay: React.FC<GameOverOverlayProps> = ({ winner, onReset, playerColor }) => {
+    const isWin = winner === playerColor;
     const isDraw = winner === 'draw';
 
     return (

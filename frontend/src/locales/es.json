@@ -1,0 +1,52 @@
+{
+    "about": {
+        "title": "Sobre Skrim",
+        "subtitle": "Superando los límites del juego descentralizado en Solana.",
+        "sections": {
+            "why_blockchain": {
+                "title": "¿Por qué Blockchain?",
+                "content": "No quiero saber tu correo electrónico. El conocimiento es poder, y con el poder viene la responsabilidad. Skrim es un proyecto solo por diversión que estoy construyendo y si recopilo datos de usuario, añade tareas.",
+                "features": {
+                    "fairness": {
+                        "title": "Equidad Comprobable",
+                        "description": "Todo es público en la cadena, no hay necesidad de confiar en mí."
+                    },
+                    "tokens": {
+                        "title": "Sin Tokens Depredadores",
+                        "description": "¿CUÁNDO $SKRIM? ¿CUÁNDO PUNTOS? ¿CUÁNDO AIRDROP? No. Solo usa $SOL."
+                    }
+                }
+            },
+            "developer": {
+                "title": "Sobre el Desarrollador",
+                "intro": "Hola, soy Will",
+                "bio": "He sido ingeniero en startups de SaaS en etapa temprana durante ~5 años, antes de eso estuve en empresas más grandes como Google y el US DoD.\n\nHe estado participando en cosas de Cripto desde que encontré Solana en 2020. La mayor parte es extremadamente estafadora, pero la tecnología principal (ver arriba sobre no querer tu correo) es muy genial.",
+                "skills_title": "Habilidades",
+                "skills_list": [
+                    "Frontend / Backend / Infra",
+                    "Codificación manual / Codificación agentica",
+                    "700 Rapid / 400 Blitz en chess.com",
+                    "Puedo resolver un cubo de Rubik en ~5 minutos"
+                ]
+            },
+            "roadmap": {
+                "title": "Hoja de Ruta",
+                "phases": [
+                    {
+                        "title": "Fase 1: Fundación (Actual)",
+                        "description": "Sistema de lobby principal, RPS con commit-reveal y el lanzamiento de Idiot Chess 5x5."
+                    },
+                    {
+                        "title": "Fase 2: Crecimiento y Social",
+                        "description": "Chat en el juego, perfiles de jugador, tablas de clasificación globales y automatización de llaves de torneos."
+                    },
+                    {
+                        "title": "Fase 3: Expansión del Ecosistema",
+                        "description": "Optimización de PWA móvil, fondos de premios controlados por DAO y SDK para juegos creados por la comunidad."
+                    }
+                ]
+            }
+        },
+        "footer": "Hecho con ❤️ para la comunidad de Solana."
+    }
+}

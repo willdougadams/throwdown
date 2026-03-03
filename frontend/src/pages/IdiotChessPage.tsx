@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { IdiotChessEngine, Piece, PieceType, Player } from '../components/idiot_chess/GameEngine';
+import { useTranslation } from 'react-i18next';
+import { GameState, Position, IdiotChessEngine, BOARD_SIZE, Piece, PieceType, Player } from '../components/idiot_chess/GameEngine';
 import Board from '../components/idiot_chess/Board';
+import ChessClock from '../components/idiot_chess/ChessClock';
 import GameOverOverlay from '../components/idiot_chess/GameOverOverlay';
 import GameInfo from '../components/idiot_chess/GameInfo';
 import { createWeb3ProgramClient } from '../services/web3ProgramClient';
@@ -11,16 +13,23 @@ import { useToast } from '../contexts/ToastContext';
 import { theme } from '../theme';
 import { Trophy, Users, Shield, Cpu, ExternalLink, RefreshCw } from 'lucide-react';
 
-const IdiotChessPage: React.FC = () => {
+interface IdiotChessPageProps {
+    gameId?: string;
+    mode?: 'live' | 'practice';
+}
+
+const IdiotChessPage: React.FC<IdiotChessPageProps> = ({ gameId: propGameId, mode: propMode }) => {
     const navigate = useNavigate();
+    const { gameId: paramGameId } = useParams<{ gameId: string }>();
     const [searchParams] = useSearchParams();
     const { publicKey, connected } = useWallet();
     const wallet = useWallet();
     const { connection } = useConnection();
     const { showToast, updateToast } = useToast();
+    const { t } = useTranslation();
 
-    const gameId = searchParams.get('gameId');
-    const mode = searchParams.get('mode') || (gameId ? 'live' : 'practice');
+    const gameId = propGameId || paramGameId || searchParams.get('gameId');
+    const mode = propMode || searchParams.get('mode') || (gameId ? 'live' : 'practice');
     const isLive = mode === 'live' && gameId;
 
     // Use ref to keep engine instance stable, state to trigger re-renders
@@ -67,7 +76,9 @@ const IdiotChessPage: React.FC = () => {
                     board,
                     turn,
                     winner,
-                    moveCount: gameData.moveCount || 0
+                    moveCount: gameData.moveCount || 0,
+                    whiteTimeSeconds: gameData.white_time_seconds || 600,
+                    blackTimeSeconds: gameData.black_time_seconds || 600
                 });
                 setGameState({ ...engineRef.current.getState() });
             }
@@ -92,20 +103,20 @@ const IdiotChessPage: React.FC = () => {
 
         if (isLive && from && to) {
             if (!connected) {
-                showToast('Connect wallet to make on-chain moves', 'error');
+                showToast(t('common.connect_wallet_to_move'), 'error');
                 return;
             }
 
             setIsSubmitting(true);
-            const toastId = showToast('Submitting move to Solana...', 'loading');
+            const toastId = showToast(t('chess.toasts.submitting'), 'loading');
             try {
                 const client = createWeb3ProgramClient(connection, wallet, 'chess');
                 await client.makeChessMove(gameId as string, from.x, from.y, to.x, to.y);
-                updateToast(toastId, 'Move confirmed!', 'success');
+                updateToast(toastId, t('chess.toasts.confirmed'), 'success');
                 refreshOnChain(true);
             } catch (e: any) {
                 console.error(e);
-                updateToast(toastId, e.message || 'Transaction failed', 'error');
+                updateToast(toastId, e.message || t('common.transaction_failed'), 'error');
                 // Revert local engine state on failure
                 refreshOnChain();
             } finally {
@@ -125,15 +136,15 @@ const IdiotChessPage: React.FC = () => {
 
     const handleClaimPrize = async () => {
         if (!isLive || !gameId || !connected) return;
-        const toastId = showToast('Claiming prize...', 'loading');
+        const toastId = showToast(t('chess.toasts.claiming'), 'loading');
         try {
             const client = createWeb3ProgramClient(connection, wallet, 'chess');
             await client.claimChessPrize(gameId);
-            updateToast(toastId, 'Prize claimed!', 'success');
+            updateToast(toastId, t('chess.toasts.claimed'), 'success');
             refreshOnChain();
         } catch (e: any) {
             console.error(e);
-            updateToast(toastId, e.message || 'Claim failed', 'error');
+            updateToast(toastId, e.message || t('chess.toasts.claim_failed'), 'error');
         }
     };
 
@@ -149,6 +160,36 @@ const IdiotChessPage: React.FC = () => {
             return () => clearTimeout(timer);
         }
     }, [isLive, gameState.turn, gameState.winner]);
+
+    // Global Timer Clock (Practice Mode ticking & Live Mode interpolation)
+    useEffect(() => {
+        if (gameState.winner) return;
+
+        const interval = setInterval(() => {
+            if (!isLive) {
+                // In practice mode, we tick the local engine
+                engineRef.current.tick(1);
+                setGameState({ ...engineRef.current.getState() });
+            } else {
+                // In live mode, we only tick if the game has started (last_action_timestamp > 0)
+                if (onChainData?.last_action_timestamp > 0) {
+                    engineRef.current.tick(1);
+                    setGameState({ ...engineRef.current.getState() });
+
+                    // Check for timeout win on-chain
+                    const now = Math.floor(Date.now() / 1000);
+                    const elapsed = now - (onChainData?.last_action_timestamp || now);
+                    const turn = gameState.turn === 'white' ? 'white' : 'black';
+                    const remaining = (turn === 'white' ? gameState.whiteTimeSeconds : gameState.blackTimeSeconds) - elapsed;
+
+                    // If we see a timeout locally in live mode, provide a hint to the user or allow the "Claim" button to appear?
+                    // The claim button logic in the program is the final authority.
+                }
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [isLive, gameState.turn, gameState.winner, onChainData?.last_action_timestamp]);
 
     const isMyTurn = () => {
         if (!isLive) return true; // In practice mode, you can move whenever
@@ -187,7 +228,7 @@ const IdiotChessPage: React.FC = () => {
                             gap: '0.5rem'
                         }}
                     >
-                        ← Lobby
+                        ← {t('chess.navbar.lobby')}
                     </button>
                     <div>
                         <h1 style={{ margin: 0, color: theme.colors.text.primary, fontSize: '1.5rem' }}>Idiot Chess</h1>
@@ -201,7 +242,7 @@ const IdiotChessPage: React.FC = () => {
                             marginTop: '0.2rem'
                         }}>
                             {isLive ? <Shield size={12} /> : <Cpu size={12} />}
-                            {isLive ? 'LIVE ON-CHAIN MATCH' : 'LOCAL PRACTICE MODE'}
+                            {isLive ? t('chess.game.live_mode') : t('chess.game.practice_mode')}
                         </div>
                     </div>
                 </div>
@@ -222,22 +263,25 @@ const IdiotChessPage: React.FC = () => {
                         >
                             <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
                         </button>
-                        {gameState.winner && onChainData && !onChainData.prizeClaimed && (
-                            <button
-                                onClick={handleClaimPrize}
-                                style={{
-                                    padding: '0.6rem 1.5rem',
-                                    backgroundColor: theme.colors.success,
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                Claim Prize Pool
-                            </button>
-                        )}
+                        {((gameState.winner) || (isLive && onChainData && !isMyTurn() && (
+                            (gameState.turn === 'white' && gameState.whiteTimeSeconds <= 0) ||
+                            (gameState.turn === 'black' && gameState.blackTimeSeconds <= 0)
+                        ))) && onChainData && !onChainData.prizeClaimed && (
+                                <button
+                                    onClick={handleClaimPrize}
+                                    style={{
+                                        padding: '0.6rem 1.5rem',
+                                        backgroundColor: theme.colors.success,
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Claim Prize Pool
+                                </button>
+                            )}
                     </div>
                 )}
             </div>
@@ -257,15 +301,27 @@ const IdiotChessPage: React.FC = () => {
                     justifyContent: 'flex-start',
                     minWidth: 0
                 }}>
+                    <ChessClock
+                        whiteTime={gameState.whiteTimeSeconds}
+                        blackTime={gameState.blackTimeSeconds}
+                        activePlayer={gameState.winner ? null : gameState.turn}
+                        isLive={!!isLive}
+                    />
                     <Board
                         engine={engineRef.current}
                         state={gameState}
                         onMove={handleMove}
                         disabled={!!(isSubmitting || (isLive && !isMyTurn()))}
+                        perspective={isLive && onChainData && publicKey ?
+                            (onChainData.playerBlack === publicKey.toString() ? 'black' : 'white') :
+                            'white'}
                     />
                     <GameOverOverlay
                         winner={gameState.winner}
                         onReset={handleReset}
+                        playerColor={isLive && onChainData && publicKey ?
+                            (onChainData.playerBlack === publicKey.toString() ? 'black' : 'white') :
+                            'white'}
                     />
 
                     {isLive && !isMyTurn() && !gameState.winner && (
@@ -279,7 +335,7 @@ const IdiotChessPage: React.FC = () => {
                         }}>
                             <Users size={20} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
                             <p style={{ margin: 0, color: theme.colors.text.secondary }}>
-                                Waiting for opponent to move on-chain...
+                                {t('chess.game.waiting_opponent')}
                             </p>
                         </div>
                     )}
@@ -304,21 +360,21 @@ const IdiotChessPage: React.FC = () => {
                             marginTop: '1rem'
                         }}>
                             <h3 style={{ margin: '0 0 1rem 0', color: theme.colors.text.primary, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <Trophy size={18} color={theme.colors.warning} /> Prize Pool Details
+                                <Trophy size={18} color={theme.colors.warning} /> {t('chess.game.prize_pool_title')}
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ color: theme.colors.text.secondary }}>Pot Total:</span>
+                                    <span style={{ color: theme.colors.text.secondary }}>{t('chess.game.pot_total')}:</span>
                                     <span style={{ fontWeight: 'bold' }}>{(onChainData.buyIn / 1e9) * 2} SOL</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ color: theme.colors.text.secondary }}>Status:</span>
+                                    <span style={{ color: theme.colors.text.secondary }}>{t('chess.game.status_label')}:</span>
                                     <span style={{ color: onChainData.prizeClaimed ? theme.colors.success : theme.colors.warning }}>
-                                        {onChainData.prizeClaimed ? 'Distributed' : 'Locked in Escrow'}
+                                        {onChainData.prizeClaimed ? t('chess.game.distributed') : t('chess.game.locked')}
                                     </span>
                                 </div>
                                 <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: '0.8rem', marginTop: '0.4rem' }}>
-                                    <span style={{ color: theme.colors.text.secondary, fontSize: '0.8rem', display: 'block', marginBottom: '0.4rem' }}>Opponent Address:</span>
+                                    <span style={{ color: theme.colors.text.secondary, fontSize: '0.8rem', display: 'block', marginBottom: '0.4rem' }}>{t('chess.game.opponent_addr')}:</span>
                                     <div style={{ fontSize: '0.8rem', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         {onChainData.playerWhite === publicKey?.toString() ? onChainData.playerBlack.slice(0, 8) : onChainData.playerWhite.slice(0, 8)}...
                                         <ExternalLink size={12} />

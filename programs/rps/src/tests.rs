@@ -179,3 +179,67 @@ fn test_player_has_revealed() {
 
     assert!(player.has_revealed());
 }
+
+// ============================================================================
+// Strategy Tests
+// ============================================================================
+
+#[test]
+fn test_resolve_strategy_fury() {
+    // Fury beats opponent's last move
+    assert_eq!(resolve_strategy(Move::Fury, Move::Rock, Move::Rock), Move::Paper);
+    assert_eq!(resolve_strategy(Move::Fury, Move::Rock, Move::Paper), Move::Scissors);
+    assert_eq!(resolve_strategy(Move::Fury, Move::Rock, Move::Scissors), Move::Rock);
+}
+
+#[test]
+fn test_resolve_strategy_serenity() {
+    // Serenity repeats own last move
+    assert_eq!(resolve_strategy(Move::Serenity, Move::Rock, Move::Paper), Move::Rock);
+    assert_eq!(resolve_strategy(Move::Serenity, Move::Paper, Move::Scissors), Move::Paper);
+    assert_eq!(resolve_strategy(Move::Serenity, Move::Scissors, Move::Rock), Move::Scissors);
+}
+
+#[test]
+fn test_resolve_strategy_trickery() {
+    // Trickery loses to opponent's last move
+    assert_eq!(resolve_strategy(Move::Trickery, Move::Rock, Move::Rock), Move::Scissors);
+    assert_eq!(resolve_strategy(Move::Trickery, Move::Rock, Move::Paper), Move::Rock);
+    assert_eq!(resolve_strategy(Move::Trickery, Move::Rock, Move::Scissors), Move::Paper);
+}
+
+#[test]
+fn test_resolve_match_with_strategies() {
+    let mut player1 = PlayerData::zeroed();
+    let mut player2 = PlayerData::zeroed();
+
+    // Round 1: P1 Rock, P2 Paper (P2 Wins 1-0)
+    // Round 2: P1 Fury (resolved to Scissors), P2 Serenity (resolved to Paper) (P1 Wins 1-1)
+    // Round 3: P1 Serenity (resolved to Scissors), P2 Trickery (resolved to Rock) (P2 Wins 1-2)
+    // Round 4: P1 Fury (resolved to Paper), P2 Serenity (resolved to Rock) (P1 Wins 2-2)
+    // Round 5: P1 Trickery (resolved to Scissors), P2 Fury (resolved to Paper) (P1 Wins 3-2)
+    
+    player1.set_moves(&[Move::Rock, Move::Fury, Move::Serenity, Move::Fury, Move::Trickery]);
+    player2.set_moves(&[Move::Paper, Move::Serenity, Move::Trickery, Move::Serenity, Move::Fury]);
+
+    // Outcome: Player 1 wins 3-2
+    assert_eq!(resolve_match(&player1, &player2), Some(0));
+}
+
+#[test]
+fn test_resolve_match_strategy_complex() {
+    let mut player1 = PlayerData::zeroed();
+    let mut player2 = PlayerData::zeroed();
+
+    // Round 1: P1 Rock, P2 Rock (Tie 0-0)
+    // Round 2: P1 Fury (resolved to Paper), P2 Trickery (resolved to Scissors) (P2 Wins 0-1)
+    // Round 3: P1 Trickery (resolved to Rock), P2 Fury (resolved to Rock) (Tie 0-1)
+    // Round 4: P1 Fury (resolved to Paper), P2 Serenity (resolved to Rock) (P1 Wins 1-1)
+    // Round 5: P1 Serenity (resolved to Paper), P2 Trickery (resolved to Rock) (P1 Wins 2-1)
+    
+    player1.set_moves(&[Move::Rock, Move::Fury, Move::Trickery, Move::Fury, Move::Serenity]);
+    player2.set_moves(&[Move::Rock, Move::Trickery, Move::Fury, Move::Serenity, Move::Trickery]);
+
+    // Outcome: Player 1 wins 2-1
+    assert_eq!(resolve_match(&player1, &player2), Some(0));
+}

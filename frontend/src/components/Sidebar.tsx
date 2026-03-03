@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import ThemeSelector from './ThemeSelector';
 import NetworkSelector from './NetworkSelector';
 import AirdropButton from './AirdropButton';
-import { Gamepad2, Home, Wallet, Swords, Grip, Trees } from 'lucide-react';
+import { Gamepad2, Home, Wallet, Swords, Grip, Trees, Info } from 'lucide-react';
 import { theme } from '../theme';
 
 interface SidebarProps {
@@ -15,6 +16,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
+    const { t } = useTranslation();
     const { publicKey } = useWallet();
     const { connection } = useConnection();
     const navigate = useNavigate();
@@ -75,7 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
                 }
             }}
         >
-            <Icon size={18} />
+            <Icon size={18} aria-hidden="true" />
             <span style={{ fontWeight: active ? '600' : '400' }}>{label}</span>
         </button>
     );
@@ -106,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
                 textAlign: 'center'
             }}>
                 <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800', color: theme.colors.text.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.xs }}>
-                    <Gamepad2 size={24} color={theme.colors.primary.main} /> Skrim
+                    <img src="/icon.svg" alt="Banyan Logo" style={{ width: '32px', height: '32px' }} aria-hidden="true" /> Skrim
                 </h2>
             </div>
 
@@ -122,7 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
 
                 {publicKey && (
                     <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: theme.colors.text.secondary, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                        <Wallet size={14} />
+                        <Wallet size={14} aria-hidden="true" />
                         <strong>{balance !== null ? balance.toFixed(2) : '...'} SOL</strong>
                     </div>
                 )}
@@ -133,26 +135,32 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
                 <NavButton
                     onClick={() => navigate('/')}
                     icon={Home}
-                    label="Home"
+                    label={t('sidebar.nav.home')}
                     active={currentPath === '/'}
                 />
                 <NavButton
                     onClick={() => navigate('/rps-lobby')}
                     icon={Swords}
-                    label="Rock Paper Scissors"
+                    label={t('sidebar.nav.rps')}
                     active={currentPath === '/rps-lobby' || currentPath.startsWith('/game/')}
                 />
                 <NavButton
-                    onClick={() => navigate('/idiot-chess')}
+                    onClick={() => navigate('/idiot-chess-lobby')}
                     icon={Grip}
-                    label="Idiot Chess"
-                    active={currentPath === '/idiot-chess'}
+                    label={t('sidebar.nav.chess')}
+                    active={currentPath === '/idiot-chess-lobby' || currentPath.startsWith('/idiot-chess')}
                 />
                 <NavButton
                     onClick={() => navigate('/great-banyan')}
                     icon={Trees}
-                    label="Great Banyan"
+                    label={t('sidebar.nav.banyan')}
                     active={currentPath === '/great-banyan'}
+                />
+                <NavButton
+                    onClick={() => navigate('/about')}
+                    icon={Info}
+                    label={t('sidebar.nav.about')}
+                    active={currentPath === '/about'}
                 />
             </div>
 

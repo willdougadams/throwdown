@@ -1,6 +1,6 @@
 // Shared types for game components
 
-export type Move = 'rock' | 'paper' | 'scissors';
+export type Move = 'rock' | 'paper' | 'scissors' | 'fury' | 'serenity' | 'trickery';
 export type MatchState = 'waiting_for_players' | 'ready_to_play' | 'waiting_for_moves' | 'waiting_for_reveals' | 'completed';
 export type GameState = 'waiting' | 'in_progress' | 'completed';
 

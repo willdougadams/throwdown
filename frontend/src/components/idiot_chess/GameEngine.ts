@@ -19,6 +19,8 @@ export interface GameState {
   winner: Player | 'draw' | null;
   history: string[];
   moveCount: number;
+  whiteTimeSeconds: number;
+  blackTimeSeconds: number;
 }
 
 export const BOARD_SIZE = 5;
@@ -61,7 +63,9 @@ export class IdiotChessEngine {
         turn: 'white',
         winner: null,
         history: [],
-        moveCount: 0
+        moveCount: 0,
+        whiteTimeSeconds: 600,
+        blackTimeSeconds: 600
       };
     }
   }
@@ -180,6 +184,22 @@ export class IdiotChessEngine {
     this.state.history.push(`${piece.player} ${piece.type} ${from.x},${from.y} -> ${to.x},${to.y}`);
 
     return true;
+  }
+
+  public tick(seconds: number = 1): void {
+    if (this.state.winner) return;
+
+    if (this.state.turn === 'white') {
+      this.state.whiteTimeSeconds = Math.max(0, this.state.whiteTimeSeconds - seconds);
+      if (this.state.whiteTimeSeconds === 0) {
+        this.state.winner = 'black';
+      }
+    } else {
+      this.state.blackTimeSeconds = Math.max(0, this.state.blackTimeSeconds - seconds);
+      if (this.state.blackTimeSeconds === 0) {
+        this.state.winner = 'white';
+      }
+    }
   }
 
   private checkWinCondition() {

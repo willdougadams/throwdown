@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { createWeb3ProgramClient } from '../services/web3ProgramClient';
 import { GameService } from '../services/gameService';
 import { Swords, Trophy, Users, X, Info, ChevronRight, Play } from 'lucide-react';
@@ -17,6 +18,7 @@ interface Challenge {
 }
 
 function PawnMoveDiagram() {
+    const { t } = useTranslation();
     const cellSize = 44;
     return (
         <div style={{
@@ -75,11 +77,11 @@ function PawnMoveDiagram() {
             <div style={{ fontSize: '0.8rem', width: '100%', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: theme.colors.primary.main }} />
-                    <span style={{ color: theme.colors.text.secondary }}>Straight: Move Only (No Capture)</span>
+                    <span style={{ color: theme.colors.text.secondary }}>{t('chess.lobby.diagram.straight')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: theme.colors.success }} />
-                    <span style={{ color: theme.colors.text.secondary }}>Diagonal: Move & Capture</span>
+                    <span style={{ color: theme.colors.text.secondary }}>{t('chess.lobby.diagram.diagonal')}</span>
                 </div>
             </div>
         </div>
@@ -91,6 +93,7 @@ function CreateChessChallengeModal({ isOpen, onClose, onCreate }: {
     onClose: () => void;
     onCreate: (entryFee: number, gameName: string) => void;
 }) {
+    const { t } = useTranslation();
     const [entryFee, setEntryFee] = useState(0.1);
     const [gameName, setGameName] = useState('');
 
@@ -109,15 +112,15 @@ function CreateChessChallengeModal({ isOpen, onClose, onCreate }: {
                 boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)', border: `1px solid ${theme.colors.border}`
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                    <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>New Challenge</h2>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }}><X size={24} /></button>
+                    <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('chess.create_modal.title')}</h2>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }} aria-label={t('common.cancel')}><X size={24} /></button>
                 </div>
 
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ color: theme.colors.text.secondary, display: 'block', marginBottom: '0.5rem' }}>Game Name (Optional)</label>
+                    <label style={{ color: theme.colors.text.secondary, display: 'block', marginBottom: '0.5rem' }}>{t('chess.create_modal.game_name')}</label>
                     <input
                         type="text"
-                        placeholder="My Epic Match"
+                        placeholder={t('chess.create_modal.game_name_placeholder')}
                         value={gameName}
                         onChange={e => setGameName(e.target.value)}
                         style={{
@@ -129,7 +132,7 @@ function CreateChessChallengeModal({ isOpen, onClose, onCreate }: {
                 </div>
 
                 <div style={{ marginBottom: '2rem' }}>
-                    <label style={{ color: theme.colors.text.secondary, display: 'block', marginBottom: '0.5rem' }}>Entry Fee (SOL)</label>
+                    <label style={{ color: theme.colors.text.secondary, display: 'block', marginBottom: '0.5rem' }}>{t('chess.create_modal.entry_fee')}</label>
                     <input
                         type="number"
                         step="0.05"
@@ -154,7 +157,7 @@ function CreateChessChallengeModal({ isOpen, onClose, onCreate }: {
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    Create Challenge
+                    {t('common.create')}
                 </button>
             </div>
         </div>
@@ -167,6 +170,7 @@ export default function IdiotChessLobbyPage() {
     const { connection } = useConnection();
     const navigate = useNavigate();
     const { showToast, updateToast } = useToast();
+    const { t } = useTranslation();
 
     const [challenges, setChallenges] = useState<Challenge[]>([]);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -205,39 +209,39 @@ export default function IdiotChessLobbyPage() {
 
     const handleCreateChallenge = async (fee: number, name: string) => {
         if (!connected) {
-            showToast('Please connect your wallet', 'error');
+            showToast(t('common.connect_wallet'), 'error');
             return;
         }
-        const toastId = showToast('Creating chess challenge...', 'loading');
+        const toastId = showToast(t('chess.toasts.creating'), 'loading');
         try {
             const client = createWeb3ProgramClient(connection, wallet, 'chess');
             const result = await client.createChessChallenge({
                 entryFee: fee,
                 gameName: name
             });
-            updateToast(toastId, 'Challenge created!', 'success');
+            updateToast(toastId, t('chess.toasts.created'), 'success');
             setShowCreateModal(false);
             navigate(`/idiot-chess?gameId=${result.gameId}`);
         } catch (e: any) {
             console.error(e);
-            updateToast(toastId, e.message || 'Failed to create challenge', 'error');
+            updateToast(toastId, e.message || t('chess.toasts.create_failed'), 'error');
         }
     };
 
     const handleAcceptChallenge = async (challengeId: string) => {
         if (!connected) {
-            showToast('Please connect your wallet', 'error');
+            showToast(t('common.connect_wallet'), 'error');
             return;
         }
-        const toastId = showToast('Accepting challenge...', 'loading');
+        const toastId = showToast(t('chess.toasts.accepting'), 'loading');
         try {
             const client = createWeb3ProgramClient(connection, wallet, 'chess');
             await client.acceptChessChallenge(challengeId);
-            updateToast(toastId, 'Challenge accepted!', 'success');
+            updateToast(toastId, t('chess.toasts.accepted'), 'success');
             navigate(`/idiot-chess?gameId=${challengeId}`);
         } catch (e: any) {
             console.error(e);
-            updateToast(toastId, e.message || 'Failed to accept challenge', 'error');
+            updateToast(toastId, e.message || t('chess.toasts.accept_failed'), 'error');
         }
     };
 
@@ -275,10 +279,10 @@ export default function IdiotChessLobbyPage() {
                         WebkitTextFillColor: 'transparent',
                         fontWeight: 800
                     }}>
-                        Idiot Chess
+                        {t('chess.lobby.title')}
                     </h1>
                     <p style={{ color: theme.colors.text.secondary, marginTop: '0.5rem', fontSize: '1.1rem' }}>
-                        5x5 Chess on Solana. Fast, brutal, on-chain.
+                        {t('chess.lobby.subtitle')}
                     </p>
                 </div>
 
@@ -309,7 +313,7 @@ export default function IdiotChessLobbyPage() {
                             e.currentTarget.style.borderColor = theme.colors.border;
                         }}
                     >
-                        <Play size={18} /> Practice Mod
+                        <Play size={18} /> {t('chess.lobby.practice_mode')}
                     </button>
 
                     <button
@@ -333,7 +337,7 @@ export default function IdiotChessLobbyPage() {
                         onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
                         onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
                     >
-                        <Swords size={18} /> New Challenge
+                        <Swords size={18} /> {t('chess.lobby.new_challenge')}
                     </button>
                 </div>
             </div>
@@ -343,9 +347,9 @@ export default function IdiotChessLobbyPage() {
                 <section>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                         <h2 style={{ fontSize: '1.5rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Users size={24} color={theme.colors.primary.main} /> Active Challenges
+                            <Users size={24} color={theme.colors.primary.main} /> {t('chess.lobby.active_challenges')}
                         </h2>
-                        {isRefreshing && <div style={{ fontSize: '0.8rem', color: theme.colors.text.secondary }}>Refreshing...</div>}
+                        {isRefreshing && <div style={{ fontSize: '0.8rem', color: theme.colors.text.secondary }}>{t('common.refreshing')}</div>}
                     </div>
 
                     {challenges.length === 0 ? (
@@ -358,8 +362,8 @@ export default function IdiotChessLobbyPage() {
                             color: theme.colors.text.secondary
                         }}>
                             <Info size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                            <p style={{ fontSize: '1.2rem' }}>No open challenges yet.</p>
-                            <p>Be the first to create one!</p>
+                            <p style={{ fontSize: '1.2rem' }}>{t('chess.lobby.no_challenges')}</p>
+                            <p>{t('chess.lobby.create_first')}</p>
                         </div>
                     ) : (
                         <div style={{ display: 'grid', gap: '1rem' }}>
@@ -385,7 +389,7 @@ export default function IdiotChessLobbyPage() {
                                                     <Trophy size={14} color={theme.colors.warning} /> {challenge.buyInSOL} SOL
                                                 </span>
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    <Users size={14} /> {challenge.players.length}/2 Players
+                                                    <Users size={14} /> {challenge.players.length}/2 {t('common.players')}
                                                 </span>
                                                 <span style={{ opacity: 0.7 }}>
                                                     By {challenge.creator.slice(0, 4)}...{challenge.creator.slice(-4)}
@@ -408,7 +412,7 @@ export default function IdiotChessLobbyPage() {
                                                 gap: '0.5rem'
                                             }}
                                         >
-                                            {isMyGame ? 'Resume Game' : (isWaiting ? 'Accept Challenge' : 'View Game')}
+                                            {isMyGame ? t('chess.lobby.resume_game') : (isWaiting ? t('chess.lobby.accept_challenge') : t('chess.lobby.view_game'))}
                                             <ChevronRight size={18} />
                                         </button>
                                     </div>
@@ -426,7 +430,7 @@ export default function IdiotChessLobbyPage() {
                         borderRadius: '16px',
                         border: '1px solid rgba(255,165,0,0.2)'
                     }}>
-                        <h3 style={{ margin: '0 0 1rem 0', color: theme.colors.warning, fontSize: '1.1rem' }}>How to play</h3>
+                        <h3 style={{ margin: '0 0 1rem 0', color: theme.colors.warning, fontSize: '1.1rem' }}>{t('chess.lobby.how_to_play.title')}</h3>
                         <ul style={{
                             paddingLeft: '1.2rem',
                             margin: 0,
@@ -434,14 +438,14 @@ export default function IdiotChessLobbyPage() {
                             fontSize: '0.9rem',
                             lineHeight: '1.6'
                         }}>
-                            <li>5x5 mini-chessboard</li>
-                            <li>Pawns can move straight forward or </li>
-                            <li>diagonally forward one square</li>
-                            <li>but can only capture diagonally</li>
-                            <li>If your king is your last piece,</li>
-                            <li>A new pawn will spawn</li>
+                            <li>{t('chess.lobby.how_to_play.rule1')}</li>
+                            <li>{t('chess.lobby.how_to_play.rule2')}</li>
+                            <li>{t('chess.lobby.how_to_play.rule3')}</li>
+                            <li>{t('chess.lobby.how_to_play.rule4')}</li>
+                            <li>{t('chess.lobby.how_to_play.rule5')}</li>
+                            <li>{t('chess.lobby.how_to_play.rule6')}</li>
 
-                            <li>Capture all enemy Kings to win!</li>
+                            <li>{t('chess.lobby.how_to_play.rule7')}</li>
                         </ul>
 
                         <PawnMoveDiagram />

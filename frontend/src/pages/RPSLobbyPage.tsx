@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { createWeb3ProgramClient } from '../services/web3ProgramClient';
 import { GameService } from '../services/gameService';
-import { Swords, Grip, Timer, Users, Search, X, Circle, FileText, Scissors } from 'lucide-react';
+import { Swords, Grip, Timer, Users, Search, X, Circle, FileText, Scissors, Zap, Wind, Sparkles } from 'lucide-react';
 import { theme } from '../theme';
 import { useToast } from '../contexts/ToastContext';
 import { useGames } from '../contexts/GamesContext';
@@ -27,6 +28,7 @@ function CreateChallengeModal({ isOpen, onClose, onCreate }: {
   onClose: () => void;
   onCreate: (entryFee: number, moves: number[]) => void;
 }) {
+  const { t } = useTranslation();
   const [entryFee, setEntryFee] = useState(0.1);
   const [moves, setMoves] = useState<number[]>([]);
   const [step, setStep] = useState<'config' | 'moves'>('config');
@@ -52,13 +54,13 @@ function CreateChallengeModal({ isOpen, onClose, onCreate }: {
         boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)', border: `1px solid ${theme.colors.border}`
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>Create Challenge</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }}><X size={24} /></button>
+          <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('rps.create_modal.title')}</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }} aria-label={t('common.cancel')}><X size={24} /></button>
         </div>
 
         {step === 'config' ? (
           <div>
-            <label style={{ color: theme.colors.text.secondary, display: 'block', marginBottom: '0.5rem' }}>Entry Fee (SOL)</label>
+            <label style={{ color: theme.colors.text.secondary, display: 'block', marginBottom: '0.5rem' }}>{t('rps.create_modal.entry_fee')}</label>
             <input
               type="number"
               value={entryFee}
@@ -76,12 +78,12 @@ function CreateChallengeModal({ isOpen, onClose, onCreate }: {
                 color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer'
               }}
             >
-              Continue to Move Selection
+              {t('rps.create_modal.continue_moves')}
             </button>
           </div>
         ) : (
           <div>
-            <p style={{ color: theme.colors.text.secondary, marginBottom: '1.5rem' }}>Select your 5 moves for the challenge:</p>
+            <p style={{ color: theme.colors.text.secondary, marginBottom: '1.5rem' }}>{t('rps.create_modal.select_moves')}</p>
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '2rem' }}>
               {[0, 1, 2, 3, 4].map(i => (
                 <div key={i} style={{
@@ -94,27 +96,64 @@ function CreateChallengeModal({ isOpen, onClose, onCreate }: {
               ))}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
-              {(['Rock', 'Paper', 'Scissors'] as const).map((m, idx) => (
-                <button
-                  key={m}
-                  onClick={() => {
-                    if (moves.length < 5) handleMoveSelect(moves.length, idx);
-                  }}
-                  style={{
-                    padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border}`,
-                    backgroundColor: theme.colors.background, color: theme.colors.text.primary,
-                    cursor: moves.length < 5 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '1rem'
-                  }}
-                >
-                  {m === 'Rock' ? <Circle size={20} /> : m === 'Paper' ? <FileText size={20} /> : <Scissors size={20} />}
-                  {m}
-                </button>
-              ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              {(['rock', 'paper', 'scissors'] as const).map((m) => {
+                const Icon = m === 'rock' ? Circle : m === 'paper' ? FileText : Scissors;
+                const idx = m === 'rock' ? 0 : m === 'paper' ? 1 : 2;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => {
+                      if (moves.length < 5) handleMoveSelect(moves.length, idx);
+                    }}
+                    style={{
+                      aspectRatio: '1', display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                      borderRadius: '12px', border: `2px solid ${theme.colors.border}`,
+                      backgroundColor: theme.colors.background, color: theme.colors.text.primary,
+                      cursor: moves.length < 5 ? 'pointer' : 'not-allowed',
+                      fontSize: '0.8rem', fontWeight: 'bold'
+                    }}
+                  >
+                    <Icon size={24} fill={m === 'rock' ? 'currentColor' : 'none'} />
+                    {t(`rps.game.moves.${m}`)}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '2rem',
+              opacity: moves.length === 0 ? 0.4 : 1,
+              pointerEvents: moves.length === 0 ? 'none' : 'auto'
+            }}>
+              {(['fury', 'serenity', 'trickery'] as const).map((s) => {
+                const Icon = s === 'fury' ? Zap : s === 'serenity' ? Wind : Sparkles;
+                const idx = s === 'fury' ? 3 : s === 'serenity' ? 4 : 5;
+                return (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      if (moves.length < 5) handleMoveSelect(moves.length, idx);
+                    }}
+                    style={{
+                      aspectRatio: '1', display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                      borderRadius: '12px', border: `2px solid ${theme.colors.border}`,
+                      backgroundColor: theme.colors.background, color: theme.colors.text.primary,
+                      cursor: moves.length < 5 ? 'pointer' : 'not-allowed',
+                      fontSize: '0.8rem', fontWeight: 'bold'
+                    }}
+                  >
+                    <Icon size={24} fill={s === 'fury' ? 'currentColor' : 'none'} />
+                    {t(`rps.game.moves.${s}`)}
+                  </button>
+                );
+              })}
             </div>
 
             <div style={{ display: 'flex', gap: '1rem' }}>
-              <button onClick={() => setStep('config')} style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border}`, background: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }}>Back</button>
+              <button onClick={() => setStep('config')} style={{ flex: 1, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border}`, background: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }}>{t('rps.create_modal.back')}</button>
               <button
                 onClick={() => onCreate(entryFee, moves)}
                 disabled={moves.length < 5}
@@ -124,7 +163,7 @@ function CreateChallengeModal({ isOpen, onClose, onCreate }: {
                   cursor: moves.length === 5 ? 'pointer' : 'not-allowed', opacity: moves.length === 5 ? 1 : 0.6
                 }}
               >
-                Create for {entryFee} SOL
+                {t('rps.create_modal.create_for', { fee: entryFee })}
               </button>
             </div>
           </div>
@@ -140,6 +179,7 @@ function AcceptChallengeModal({ isOpen, onClose, onAccept, challenge }: {
   onAccept: (moves: number[]) => void;
   challenge: Challenge | null;
 }) {
+  const { t } = useTranslation();
   const [moves, setMoves] = useState<number[]>([]);
 
   if (!isOpen || !challenge) return null;
@@ -163,15 +203,15 @@ function AcceptChallengeModal({ isOpen, onClose, onAccept, challenge }: {
         boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)', border: `1px solid ${theme.colors.border}`
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>Accept Challenge</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }}><X size={24} /></button>
+          <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('rps.accept_modal.title')}</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }} aria-label={t('common.cancel')}><X size={24} /></button>
         </div>
 
         <p style={{ color: theme.colors.text.secondary, marginBottom: '2rem' }}>
-          Accepting challenge from <strong>{challenge.creator.slice(0, 4)}...{challenge.creator.slice(-4)}</strong> for <strong>{challenge.buyInSOL} SOL</strong>.
+          {t('rps.accept_modal.intro', { creator: `${challenge.creator.slice(0, 4)}...${challenge.creator.slice(-4)}`, fee: challenge.buyInSOL })}
         </p>
 
-        <p style={{ color: theme.colors.text.secondary, marginBottom: '1.5rem' }}>Select your 5 moves:</p>
+        <p style={{ color: theme.colors.text.secondary, marginBottom: '1.5rem' }}>{t('rps.accept_modal.select_moves')}</p>
         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '2rem' }}>
           {[0, 1, 2, 3, 4].map(i => (
             <div key={i} style={{
@@ -184,23 +224,60 @@ function AcceptChallengeModal({ isOpen, onClose, onAccept, challenge }: {
           ))}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
-          {(['Rock', 'Paper', 'Scissors'] as const).map((m, idx) => (
-            <button
-              key={m}
-              onClick={() => {
-                if (moves.length < 5) handleMoveSelect(moves.length, idx);
-              }}
-              style={{
-                padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border}`,
-                backgroundColor: theme.colors.background, color: theme.colors.text.primary,
-                cursor: moves.length < 5 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '1rem'
-              }}
-            >
-              {idx === 0 ? <Circle size={20} /> : idx === 1 ? <FileText size={20} /> : <Scissors size={20} />}
-              {m}
-            </button>
-          ))}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          {(['rock', 'paper', 'scissors'] as const).map((m) => {
+            const Icon = m === 'rock' ? Circle : m === 'paper' ? FileText : Scissors;
+            const idx = m === 'rock' ? 0 : m === 'paper' ? 1 : 2;
+            return (
+              <button
+                key={m}
+                onClick={() => {
+                  if (moves.length < 5) handleMoveSelect(moves.length, idx);
+                }}
+                style={{
+                  aspectRatio: '1', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                  borderRadius: '12px', border: `2px solid ${theme.colors.border}`,
+                  backgroundColor: theme.colors.background, color: theme.colors.text.primary,
+                  cursor: moves.length < 5 ? 'pointer' : 'not-allowed',
+                  fontSize: '0.8rem', fontWeight: 'bold'
+                }}
+              >
+                <Icon size={24} fill={m === 'rock' ? 'currentColor' : 'none'} />
+                {t(`rps.game.moves.${m}`)}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '2rem',
+          opacity: moves.length === 0 ? 0.4 : 1,
+          pointerEvents: moves.length === 0 ? 'none' : 'auto'
+        }}>
+          {(['fury', 'serenity', 'trickery'] as const).map((s) => {
+            const Icon = s === 'fury' ? Zap : s === 'serenity' ? Wind : Sparkles;
+            const idx = s === 'fury' ? 3 : s === 'serenity' ? 4 : 5;
+            return (
+              <button
+                key={s}
+                onClick={() => {
+                  if (moves.length < 5) handleMoveSelect(moves.length, idx);
+                }}
+                style={{
+                  aspectRatio: '1', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                  borderRadius: '12px', border: `2px solid ${theme.colors.border}`,
+                  backgroundColor: theme.colors.background, color: theme.colors.text.primary,
+                  cursor: moves.length < 5 ? 'pointer' : 'not-allowed',
+                  fontSize: '0.8rem', fontWeight: 'bold'
+                }}
+              >
+                <Icon size={24} fill={s === 'fury' ? 'currentColor' : 'none'} />
+                {t(`rps.game.moves.${s}`)}
+              </button>
+            );
+          })}
         </div>
 
         <button
@@ -212,7 +289,7 @@ function AcceptChallengeModal({ isOpen, onClose, onAccept, challenge }: {
             cursor: moves.length === 5 ? 'pointer' : 'not-allowed', opacity: moves.length === 5 ? 1 : 0.6
           }}
         >
-          Join & Submit Moves
+          {t('rps.accept_modal.join_submit')}
         </button>
       </div>
     </div>
@@ -227,6 +304,7 @@ export default function RPSLobbyPage() {
   const { showToast, updateToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
 
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -258,7 +336,7 @@ export default function RPSLobbyPage() {
 
   const handleCreateChallenge = async (fee: number, moves: number[]) => {
     if (!publicKey) return;
-    const toastId = showToast('Creating challenge...', 'loading');
+    const toastId = showToast(t('rps.toasts.creating'), 'loading');
     try {
       const client = createWeb3ProgramClient(connection, wallet);
       const salt = BigInt(Math.floor(Math.random() * 1000000)); // Simple salt for now
@@ -271,42 +349,44 @@ export default function RPSLobbyPage() {
       });
 
       // Save moves to localStorage for Reveal phase
+      const moveMapping = ['rock', 'paper', 'scissors', 'fury', 'serenity', 'trickery'];
       const key = `${publicKey.toString()}-${result.gameId}-0`;
       localStorage.setItem(key, JSON.stringify({
-        moves: moves.map(m => m === 0 ? 'rock' : m === 1 ? 'paper' : 'scissors'),
+        moves: moves.map(m => moveMapping[m]),
         salt: salt.toString(),
         timestamp: Date.now()
       }));
 
-      updateToast(toastId, 'Challenge created!', 'success');
+      updateToast(toastId, t('rps.toasts.created'), 'success');
       setShowCreateModal(false);
       navigate(`/game/${result.gameId}`);
     } catch (e: any) {
       console.error(e);
-      updateToast(toastId, e.message || 'Failed to create challenge', 'error');
+      updateToast(toastId, e.message || t('rps.toasts.create_failed'), 'error');
     }
   };
 
   const handleAcceptChallenge = async (moves: number[]) => {
     if (!publicKey || !acceptingChallenge) return;
-    const toastId = showToast('Accepting challenge...', 'loading');
+    const toastId = showToast(t('rps.toasts.accepting'), 'loading');
     try {
       const client = createWeb3ProgramClient(connection, wallet);
       await client.acceptChallenge(acceptingChallenge.id, moves);
 
       // Save moves to localStorage so they show up in UI
+      const moveMapping = ['rock', 'paper', 'scissors', 'fury', 'serenity', 'trickery'];
       const key = `${publicKey.toString()}-${acceptingChallenge.id}-0`;
       localStorage.setItem(key, JSON.stringify({
-        moves: moves.map(m => m === 0 ? 'rock' : m === 1 ? 'paper' : 'scissors'),
+        moves: moves.map(m => moveMapping[m]),
         salt: "0", // No salt needed for acceptor but keep format
         timestamp: Date.now()
       }));
 
-      updateToast(toastId, 'Challenge accepted!', 'success');
+      updateToast(toastId, t('rps.toasts.accepted'), 'success');
       navigate(`/game/${acceptingChallenge.id}`);
     } catch (e: any) {
       console.error(e);
-      updateToast(toastId, e.message || 'Failed to accept challenge', 'error');
+      updateToast(toastId, e.message || t('rps.toasts.accept_failed'), 'error');
     }
   };
 
@@ -336,10 +416,10 @@ export default function RPSLobbyPage() {
       }}>
         <div>
           <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: theme.colors.text.primary, fontSize: isMobile ? '1.5rem' : '2rem', margin: 0 }}>
-            <Swords size={isMobile ? 24 : 32} color={theme.colors.primary.main} /> Rock Paper Scissors
+            <Swords size={isMobile ? 24 : 32} color={theme.colors.primary.main} /> {t('rps.lobby.title')}
           </h1>
           <p style={{ margin: '0.5rem 0 0 0', color: theme.colors.text.secondary }}>
-            Join the queue and battle for SOL prizes
+            {t('rps.lobby.subtitle')}
           </p>
         </div>
         {/* Create Tournament button removed */}
@@ -349,7 +429,7 @@ export default function RPSLobbyPage() {
         padding: '1rem', backgroundColor: theme.colors.surface, borderRadius: '12px', border: `1px solid ${theme.colors.border}`
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>Open Challenges</h2>
+          <h2 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('rps.lobby.open_challenges')}</h2>
           <button
             onClick={() => setShowCreateModal(true)}
             style={{
@@ -357,13 +437,13 @@ export default function RPSLobbyPage() {
               border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold'
             }}
           >
-            Create Challenge
+            {t('rps.lobby.create_challenge')}
           </button>
         </div>
 
         {challenges.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: theme.colors.text.secondary }}>
-            No open challenges found. Create one to start playing!
+            {t('rps.lobby.no_challenges')}
           </div>
         ) : (
           <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: isMobile ? '1' : 'repeat(auto-fill, minmax(300px, 1fr))' }}>
@@ -373,7 +453,7 @@ export default function RPSLobbyPage() {
                 border: `1px solid ${theme.colors.border}`, display: 'flex', flexDirection: 'column', gap: '1rem'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: theme.colors.primary.main, fontWeight: 'bold' }}>{c.buyInSOL} SOL Match</span>
+                  <span style={{ color: theme.colors.primary.main, fontWeight: 'bold' }}>{t('common.sol_match', { fee: c.buyInSOL })}</span>
                   <span style={{ color: theme.colors.text.secondary, fontSize: '0.8rem' }}>{c.creator.slice(0, 6)}...</span>
                 </div>
                 <button
@@ -395,8 +475,8 @@ export default function RPSLobbyPage() {
                   }}
                 >
                   {(publicKey && c.players.includes(publicKey.toString()))
-                    ? (c.status === 'in_progress' ? 'Reveal / View' : 'Your Challenge')
-                    : 'Accept Challenge'}
+                    ? (c.status === 'in_progress' ? t('rps.lobby.reveal_view') : t('rps.lobby.your_challenge'))
+                    : t('rps.lobby.accept_challenge')}
                 </button>
               </div>
             ))}

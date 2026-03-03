@@ -282,6 +282,7 @@ export const GreatBanyanGame: React.FC = () => {
                     { pubkey: treePda, isSigner: false, isWritable: false },
                     { pubkey: leftPda, isSigner: false, isWritable: true },
                     { pubkey: rightPda, isSigner: false, isWritable: true },
+                    { pubkey: treeState!.authority, isSigner: false, isWritable: true },
                 ],
                 programId: PROGRAM_ID,
                 data: Buffer.from(data),

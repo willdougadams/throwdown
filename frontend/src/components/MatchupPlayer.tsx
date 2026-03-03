@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { GemIcon, FileText, Scissors, Lock, HelpCircle, Minus } from 'lucide-react';
+import { Circle, FileText, Scissors, Lock, HelpCircle, Minus, Zap, Wind, Sparkles } from 'lucide-react';
 import { createWeb3ProgramClient } from '../services/web3ProgramClient';
 import { useToast } from '../contexts/ToastContext';
 import { WalletDisplay } from './WalletDisplay';
 import { MatchupPlayerData, MatchState, GameState } from '../types/game';
 import { theme } from '../theme';
 
-const RockIcon = () => <GemIcon size={16} />;
+const RockIcon = () => <Circle size={16} />;
 const PaperIcon = () => <FileText size={16} />;
 const ScissorsIcon = () => <Scissors size={16} />;
 
@@ -130,10 +130,13 @@ export function MatchupPlayer({
   }
 
   // Render a single move icon
-  const renderMoveIcon = (move: 'rock' | 'paper' | 'scissors') => {
+  const renderMoveIcon = (move: 'rock' | 'paper' | 'scissors' | 'fury' | 'serenity' | 'trickery') => {
     if (move === 'rock') return <RockIcon />;
     if (move === 'paper') return <PaperIcon />;
     if (move === 'scissors') return <ScissorsIcon />;
+    if (move === 'fury') return <Zap size={16} />;
+    if (move === 'serenity') return <Wind size={16} />;
+    if (move === 'trickery') return <Sparkles size={16} />;
     return null;
   };
 

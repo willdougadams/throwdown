@@ -13,6 +13,9 @@ export enum Move {
   Rock = 0,
   Paper = 1,
   Scissors = 2,
+  Fury = 3,
+  Serenity = 4,
+  Trickery = 5,
 }
 
 export enum GameState {
@@ -414,6 +417,14 @@ export class ChessGameAccountDeserializer {
     const prize_pool = view.getBigUint64(offset, true);
     offset += 8;
 
+    // white_time_seconds: i64 (8)
+    const white_time_seconds = view.getBigInt64(offset, true);
+    offset += 8;
+
+    // black_time_seconds: i64 (8)
+    const black_time_seconds = view.getBigInt64(offset, true);
+    offset += 8;
+
     // players: [PlayerData; 2] (2 * 40 = 80)
     const players = [];
     for (let i = 0; i < 2; i++) {
@@ -482,6 +493,8 @@ export class ChessGameAccountDeserializer {
       buy_in_lamports,
       buyIn: Number(buy_in_lamports), // Match IdiotChessPage usage
       prize_pool,
+      white_time_seconds: Number(white_time_seconds),
+      black_time_seconds: Number(black_time_seconds),
       players,
       playerWhite: players[0]?.pubkey || '',
       playerBlack: players[1]?.pubkey || '',
@@ -491,6 +504,7 @@ export class ChessGameAccountDeserializer {
       winner: winnerVal === 0 ? null : winnerVal, // Keep numeric winner for page component
       moveCount: move_count, // camelCase for page
       move_count,
+      prizeClaimed: winnerVal !== 0 && players.every(p => p.eliminated),
       state: winner ? 'Finished' : (players.length < 2 ? 'WaitingForPlayers' : 'InProgress')
     };
 

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { GameState, Position, IdiotChessEngine, BOARD_SIZE, Piece as PieceType } from './GameEngine';
+import { GameState, Position, IdiotChessEngine, BOARD_SIZE, Piece as PieceType, Player } from './GameEngine';
 import Piece from './Piece';
 import { theme } from '../../theme';
 import { motion } from 'framer-motion';
@@ -22,6 +22,7 @@ interface BoardProps {
     state: GameState;
     onMove: (from?: Position, to?: Position) => void;
     disabled?: boolean;
+    perspective?: Player;
 }
 
 // --- Draggable Wrapper ---
@@ -71,7 +72,6 @@ const DraggablePiece: React.FC<DraggablePieceProps> = ({ id, piece, isSelected }
                 touchAction: 'none' // Essential for touch drag
             }}
         >
-            {/* We keep motion.div here for the layout animations from click moves */}
             <motion.div
                 layoutId={piece.id}
                 style={{ width: '100%', height: '100%' }}
@@ -123,17 +123,14 @@ const DroppableSquare: React.FC<DroppableSquareProps> = ({ x, y, children, isBla
             }}
         >
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                {/* Highlight Selected */}
                 {isSelected && (
                     <div style={{ position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(255, 255, 0, 0.5)' }} />
                 )}
 
-                {/* Highlight Drag Over */}
-                {isOver && !hasPiece && ( // Only highlight empty squares on hover for clarity (or handled by GameEngine validation visually?? currently assumes valid)
+                {isOver && !hasPiece && (
                     <div style={{ position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(255, 255, 255, 0.3)', zIndex: 5 }} />
                 )}
 
-                {/* Highlight Valid Move */}
                 {isValidMove && (
                     <div style={{
                         position: 'absolute',
@@ -152,15 +149,12 @@ const DroppableSquare: React.FC<DroppableSquareProps> = ({ x, y, children, isBla
 };
 
 
-const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled }) => {
+const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled, perspective = 'white' }) => {
     const [selectedPos, setSelectedPos] = useState<Position | null>(null);
     const [validMoves, setValidMoves] = useState<Position[]>([]);
     const [activeId, setActiveId] = useState<string | null>(null);
     const [activePiece, setActivePiece] = useState<PieceType | null>(null);
 
-    // Sensors: differentiate between click and drag
-    // Mouse: needs 5px movement to trigger drag, otherwise it's a click
-    // Touch: needs 250ms press or 5px movement
     const sensors = useSensors(
         useSensor(MouseSensor, {
             activationConstraint: {
@@ -179,11 +173,8 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled }) => {
         // If game over or disabled, ignore
         if (state.winner || disabled) return;
 
-        // Prevent user from interacting during computer's turn (Black) in practice mode
-        // In live mode, 'disabled' will be true if it's not the user's turn
-        if (state.turn === 'black' && !disabled) {
-            // In practice mode we still let AI move, but we should block user
-            // Actually, if it's black's turn and not disabled, it's AI turn
+        // Prevent user from interacting during opponent's turn
+        if (state.turn !== perspective) {
             return;
         }
 
@@ -221,14 +212,11 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled }) => {
     };
 
     const handleDragStart = (event: DragStartEvent) => {
-        if (disabled) return;
+        if (disabled || state.turn !== perspective) return;
         const { active } = event;
         setActiveId(active.id as string);
         setActivePiece(active.data.current?.piece as PieceType);
 
-        // Optional: Highlight valid moves for the dragged piece immediately
-        // We need coordinates for this. We can find the piece in the board state.
-        // But brute force search is fast enough for 5x5
         let foundPos: Position | null = null;
         for (let y = 0; y < BOARD_SIZE; y++) {
             for (let x = 0; x < BOARD_SIZE; x++) {
@@ -247,13 +235,11 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled }) => {
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
-        if (disabled) return;
+        if (disabled || state.turn !== perspective) return;
         const { active, over } = event;
         setActiveId(null);
         setActivePiece(null);
 
-        // Always clear selection/valid moves on clear
-        // Or we can leave them if the move failed? Let's clear for cleaner UI
         setSelectedPos(null);
         setValidMoves([]);
 
@@ -263,8 +249,6 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled }) => {
         const [targetX, targetY] = (over.id as string).split('-').map(Number);
 
         // Find source coordinates
-        // We can't rely on 'selectedPos' because drag might have started without click-select (though we set it in dragStart)
-        // But safely resolving from ID is better
         let sourcePos: Position | null = null;
         for (let y = 0; y < BOARD_SIZE; y++) {
             for (let x = 0; x < BOARD_SIZE; x++) {
@@ -317,17 +301,34 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled }) => {
     };
 
     const rows = [];
-    // Render from Top (y=4) to Bottom (y=0)
-    for (let y = BOARD_SIZE - 1; y >= 0; y--) {
-        const cols = [];
-        for (let x = 0; x < BOARD_SIZE; x++) {
-            cols.push(renderSquare(x, y));
+    if (perspective === 'black') {
+        // Black Perspective: Render from Bottom (y=0) to Top (y=4)
+        // And from Right (x=4) to Left (x=0)
+        for (let y = 0; y < BOARD_SIZE; y++) {
+            const cols = [];
+            for (let x = BOARD_SIZE - 1; x >= 0; x--) {
+                cols.push(renderSquare(x, y));
+            }
+            rows.push(
+                <div key={`row-${y}`} style={{ display: 'grid', gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)` }}>
+                    {cols}
+                </div>
+            );
         }
-        rows.push(
-            <div key={`row-${y}`} style={{ display: 'grid', gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)` }}>
-                {cols}
-            </div>
-        );
+    } else {
+        // White Perspective: Render from Top (y=4) to Bottom (y=0)
+        // And from Left (x=0) to Right (x=4)
+        for (let y = BOARD_SIZE - 1; y >= 0; y--) {
+            const cols = [];
+            for (let x = 0; x < BOARD_SIZE; x++) {
+                cols.push(renderSquare(x, y));
+            }
+            rows.push(
+                <div key={`row-${y}`} style={{ display: 'grid', gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)` }}>
+                    {cols}
+                </div>
+            );
+        }
     }
 
     return (
@@ -335,11 +336,9 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled }) => {
             sensors={sensors}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
-        // collisionDetection={closestCenter} // Optional, but default rectangle intersection is usually fine for grid
         >
             <div style={{
                 width: '100%',
-                // height: '100%',
                 aspectRatio: '1 / 1',
                 border: `4px solid ${theme.colors.border}`,
                 borderRadius: '4px',

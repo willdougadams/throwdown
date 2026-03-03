@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { useTranslation } from 'react-i18next';
 import { createWeb3ProgramClient } from '../services/web3ProgramClient';
 import { MatchupDisplay } from '../components/MatchupDisplay';
 import { MoveSubmissionModal } from '../components/MoveSubmissionModal';
@@ -8,7 +9,7 @@ import { Timer } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import { theme } from '../theme';
 
-type Move = 'rock' | 'paper' | 'scissors';
+type Move = 'rock' | 'paper' | 'scissors' | 'fury' | 'serenity' | 'trickery';
 
 // Local storage utility functions for moves
 const getMovesStorageKey = (userPubkey: string, gameId: string, round: number) => {
@@ -51,6 +52,7 @@ export default function GamePage() {
   const { publicKey } = wallet;
   const { connection } = useConnection();
   const { showToast, updateToast } = useToast();
+  const { t } = useTranslation();
 
   // Essential state only
   const [selectedMoves, setSelectedMoves] = useState<Move[]>([]);
@@ -82,7 +84,7 @@ export default function GamePage() {
       const gameDetails = await gameService.fetchGameDetails(gameId);
 
       if (!gameDetails) {
-        setError('Game not found');
+        setError(t('rps.game.not_found'));
         return;
       }
 
@@ -147,7 +149,7 @@ export default function GamePage() {
       setGameData(convertedGameData);
     } catch (err) {
       console.error('Error fetching game data:', err);
-      setError('Failed to load game data. Please try again.');
+      setError(t('rps.game.load_failed'));
     } finally {
       setLoading(false);
     }
@@ -239,11 +241,11 @@ export default function GamePage() {
   // Action handlers
   const handleSubmitMoves = async () => {
     if (!publicKey || !gameId || selectedMoves.length !== 5) {
-      showToast('Please select all moves', 'error');
+      showToast(t('rps.game.select_all_moves'), 'error');
       return;
     }
 
-    const toastId = showToast('Joining and submitting moves...', 'loading');
+    const toastId = showToast(t('rps.toasts.joining_submitting'), 'loading');
     try {
       const programClient = createWeb3ProgramClient(connection, wallet);
       // Convert moves to numbers
@@ -252,26 +254,29 @@ export default function GamePage() {
           case 'rock': return 0;
           case 'paper': return 1;
           case 'scissors': return 2;
+          case 'fury': return 3;
+          case 'serenity': return 4;
+          case 'trickery': return 5;
           default: return 0;
         }
       });
 
       await programClient.joinRPSGame(gameId, moveNumbers);
-      updateToast(toastId, 'Successfully joined match!', 'success');
+      updateToast(toastId, t('rps.toasts.joined'), 'success');
       await fetchGameData();
     } catch (error: any) {
       console.error('Error joining match:', error);
-      updateToast(toastId, error.message || 'Failed to join match', 'error');
+      updateToast(toastId, error.message || t('rps.toasts.join_failed'), 'error');
     }
   };
 
   const handleRevealMoves = async () => {
     if (!publicKey || !gameId || selectedMoves.length !== 5 || !moveSalt) {
-      showToast('No moves to reveal - please submit moves first', 'error');
+      showToast(t('rps.game.no_moves_to_reveal'), 'error');
       return;
     }
 
-    const toastId = showToast('Revealing moves...', 'loading');
+    const toastId = showToast(t('rps.toasts.revealing'), 'loading');
     try {
       const programClient = createWeb3ProgramClient(connection, wallet);
 
@@ -281,16 +286,19 @@ export default function GamePage() {
           case 'rock': return 0;
           case 'paper': return 1;
           case 'scissors': return 2;
+          case 'fury': return 3;
+          case 'serenity': return 4;
+          case 'trickery': return 5;
           default: return 0;
         }
       });
 
       await programClient.revealMoves(gameId, moveNumbers, moveSalt);
-      updateToast(toastId, 'Moves revealed! Matchup will be resolved automatically.', 'success');
+      updateToast(toastId, t('rps.toasts.revealed_auto'), 'success');
       await fetchGameData();
     } catch (error) {
       console.error('Error revealing moves:', error);
-      updateToast(toastId, 'Failed to reveal moves - please try again', 'error');
+      updateToast(toastId, t('rps.toasts.reveal_failed'), 'error');
     }
   };
 
@@ -317,11 +325,11 @@ export default function GamePage() {
     try {
       const programClient = createWeb3ProgramClient(connection, wallet);
       await programClient.claimPrize(gameId);
-      updateToast(toastId, 'Congratulations! Prize transferred to your wallet!', 'success');
+      updateToast(toastId, t('rps.toasts.claimed_congrats'), 'success');
       await fetchGameData();
     } catch (error: any) {
       console.error('Error claiming prize:', error);
-      updateToast(toastId, `Failed to claim prize: ${error?.message || 'Unknown error'}`, 'error');
+      updateToast(toastId, t('rps.toasts.claim_failed_reason', { reason: error?.message || t('common.unknown_error') }), 'error');
     }
   };
 
@@ -335,7 +343,7 @@ export default function GamePage() {
   if (loading) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2 style={{ color: theme.colors.text.primary }}>Loading Game Data...</h2>
+        <h2 style={{ color: theme.colors.text.primary }}>{t('common.loading_game_data')}</h2>
         <div style={{
           display: 'inline-block',
           width: '40px',
@@ -359,7 +367,7 @@ export default function GamePage() {
   if (error) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2 style={{ color: theme.colors.text.primary }}>Error Loading Game</h2>
+        <h2 style={{ color: theme.colors.text.primary }}>{t('rps.game.error_loading')}</h2>
         <p style={{ color: theme.colors.error, marginBottom: '1rem' }}>{error}</p>
         <button
           onClick={fetchGameData}
@@ -373,7 +381,7 @@ export default function GamePage() {
             marginRight: '1rem'
           }}
         >
-          Retry
+          {t('common.retry')}
         </button>
         <button
           onClick={() => navigate('/rps-lobby')}
@@ -386,7 +394,7 @@ export default function GamePage() {
             cursor: 'pointer'
           }}
         >
-          Back to Lobby
+          {t('rps.game.back_to_lobby')}
         </button>
       </div>
     );
@@ -396,8 +404,8 @@ export default function GamePage() {
   if (!gameData) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2 style={{ color: theme.colors.text.primary }}>Game Not Found</h2>
-        <button onClick={() => navigate('/rps-lobby')}>Back to Lobby</button>
+        <h2 style={{ color: theme.colors.text.primary }}>{t('rps.game.not_found')}</h2>
+        <button onClick={() => navigate('/rps-lobby')}>{t('rps.game.back_to_lobby')}</button>
       </div>
     );
   }
@@ -409,7 +417,7 @@ export default function GamePage() {
         padding: '1rem',
         marginBottom: '1rem'
       }}>
-        <h1 style={{ color: theme.colors.text.primary, margin: 0 }}>Matchup</h1>
+        <h1 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('rps.game.matchup_title')}</h1>
         {gameData.maxPlayers === 2 && gameData.state === 'in_progress' && (() => {
           const now = Math.floor(Date.now() / 1000);
           const deadline = lastActionTimestamp + 90;
@@ -434,14 +442,13 @@ export default function GamePage() {
                 gap: '8px'
               }}>
                 <Timer size={20} />
-                {isStalled ? 'Game Stalled: Action Deadline Passed' : `Action Deadline: ${new Date(deadline * 1000).toLocaleTimeString()}`}
+                {isStalled ? t('rps.game.deadline.stalled') : t('rps.game.deadline.remaining', { time: new Date(deadline * 1000).toLocaleTimeString() })}
               </div>
 
               {isStalled && isUserInGame() && (
                 <div style={{ marginTop: theme.spacing.sm }}>
                   <p style={{ color: theme.colors.text.secondary, marginBottom: theme.spacing.md }}>
-                    The opponent (or both of you) missed the 90s deadline.
-                    You can now claim the prize by forfeit or request a refund of your buy-in.
+                    {t('rps.game.deadline.stalled_note')}
                   </p>
                   <button
                     onClick={handleClaimPrize}
@@ -455,7 +462,7 @@ export default function GamePage() {
                       fontWeight: 'bold'
                     }}
                   >
-                    Claim Refund / Forfeit
+                    {t('rps.game.claim_refund')}
                   </button>
                 </div>
               )}

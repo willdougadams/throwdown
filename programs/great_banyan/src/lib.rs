@@ -59,8 +59,6 @@ pub enum BanyanInstruction {
         mined_slot: u64,
         essence: String,
     },
-    // BloomBud removed - auto-bloom implemented in NurtureBud
-    // BloomBud, 
 }
 
 // --- Logic ---
@@ -131,6 +129,11 @@ pub fn process_instruction(
             let manager = GameManager::try_from_slice(&manager_info.try_borrow_data()?)
                 .map_err(|_| ProgramError::InvalidAccountData)?;
             
+            if manager.authority != *payer.key() {
+                msg!("Only the platform authority can initialize new trees");
+                return Err(ProgramError::InvalidAccountData);
+            }
+            
             // Create TreeState using epoch
             let epoch_bytes = manager.current_epoch.to_le_bytes();
             let tree_seeds: &[&[u8]] = &[b"tree", &epoch_bytes];
@@ -163,17 +166,15 @@ pub fn process_instruction(
                 return Err(ProgramError::InvalidSeeds);
             }
 
-            let root_bud_key_hash = keccak::hash(root_bud_info.key().as_ref());
-            let root_vitality_req = (root_bud_key_hash.0[0] % 5) as u64 + 1;
 
             let root_bud = Bud {
                 parent: [0u8; 32],
                 depth: 0,
-                vitality_current: 1, // Start at 1
-                vitality_required: 10, // Require 10
+                vitality_current: 10, // Pre-nurtured
+                vitality_required: 10,
                 is_bloomed: false,
                 is_fruit: false,
-                contributions: Vec::new(),
+                contributions: vec![(*payer.key(), 10)], // Authority is the nurturer
             };
             let bud_data = borsh::to_vec(&root_bud).map_err(|_| ProgramError::InvalidInstructionData)?;
 
@@ -319,8 +320,24 @@ pub fn process_instruction(
 
                     let prize = manager.prize_pool;
                     if prize > 0 {
-                        *manager_info.try_borrow_mut_lamports()? -= prize;
-                        *nurturer.try_borrow_mut_lamports()? += prize;
+                        // Root participant (authority) gets 1%, bloomer gets 99%
+                        let platform_fee = prize / 100;
+                        let nurturer_payout = prize.saturating_sub(platform_fee);
+
+                        // Expected order for fruit payout: ... Left, Right, Authority
+                        let authority_info = next_account_info(account_iter)?;
+
+                        if platform_fee > 0 {
+                            **manager_info.try_borrow_mut_lamports()? -= platform_fee;
+                            **authority_info.try_borrow_mut_lamports()? += platform_fee;
+                            msg!("Platform fee of {} paid to authority", platform_fee);
+                        }
+
+                        if nurturer_payout > 0 {
+                            **manager_info.try_borrow_mut_lamports()? -= nurturer_payout;
+                            **nurturer.try_borrow_mut_lamports()? += nurturer_payout;
+                            msg!("Nurturer payout: {}", nurturer_payout);
+                        }
                     }
                     
                     manager.current_epoch += 1;
@@ -340,8 +357,6 @@ pub fn process_instruction(
                         return Err(ProgramError::InvalidSeeds);
                     }
     
-                    let left_hash = keccak::hash(left_child_info.key().as_ref());
-                    let left_req = (left_hash.0[0] % 5) as u64 + 1;
                     
                     let left_child = Bud {
                         parent: *bud_info.key(),
@@ -370,8 +385,6 @@ pub fn process_instruction(
                         return Err(ProgramError::InvalidSeeds);
                     }
     
-                    let right_hash = keccak::hash(right_child_info.key().as_ref());
-                    let right_req = (right_hash.0[0] % 5) as u64 + 1;
                     
                     let right_child = Bud {
                         parent: *bud_info.key(),
@@ -508,18 +521,6 @@ fn invoke_transfer(
     )
 }
 
-fn verify_merkle_proof(proof: &Vec<[u8; 32]>, root: [u8; 32], leaf: [u8; 32]) -> bool {
-    let mut current_hash = leaf;
-    for hash in proof {
-        let data = if current_hash <= *hash {
-            [current_hash, *hash].concat()
-        } else {
-            [*hash, current_hash].concat()
-        };
-        current_hash = keccak::hash(&data).0;
-    }
-    current_hash == root
-}
 
 pinocchio::entrypoint!(process_instruction);
 

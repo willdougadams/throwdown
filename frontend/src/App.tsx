@@ -11,7 +11,9 @@ import RPSLobbyPage from './pages/RPSLobbyPage';
 import IdiotChessLobbyPage from './pages/IdiotChessLobbyPage';
 import GamePage from './pages/GamePage';
 import IdiotChessPage from './pages/IdiotChessPage';
+import GameDispatcher from './pages/GameDispatcher';
 import GreatBanyanPage from './pages/GreatBanyanPage';
+import AboutPage from './pages/AboutPage';
 
 function App() {
     return (
@@ -25,10 +27,13 @@ function App() {
                                     <Routes>
                                         <Route path="/" element={<LandingPage />} />
                                         <Route path="/rps-lobby" element={<RPSLobbyPage />} />
-                                        <Route path="/game/:gameId" element={<GamePage />} />
+                                        <Route path="/game/:gameId" element={<GameDispatcher />} />
+                                        <Route path="/rps-game/:gameId" element={<GamePage />} />
                                         <Route path="/idiot-chess-lobby" element={<IdiotChessLobbyPage />} />
                                         <Route path="/idiot-chess" element={<IdiotChessPage />} />
+                                        <Route path="/chess-game/:gameId" element={<IdiotChessPage mode="live" />} />
                                         <Route path="/great-banyan" element={<GreatBanyanPage />} />
+                                        <Route path="/about" element={<AboutPage />} />
                                     </Routes>
                                 </Layout>
                             </Router>

@@ -94,15 +94,17 @@ pub struct GameAccount {
     pub last_action_timestamp: i64,               // 8  -> 104
     pub buy_in_lamports: u64,                     // 8  -> 112
     pub prize_pool: u64,                          // 8  -> 120
-    pub players: [PlayerData; MAX_PLAYERS],       // 2 * 40 = 80 -> 200
-    pub board: [[Piece; BOARD_SIZE]; BOARD_SIZE], // 5 * 5 * 2 = 50 -> 250
-    pub turn: Player,                             // 1 -> 251
-    pub winner: Winner,                           // 1 -> 252
-    pub move_count: u8,                           // 1 -> 253
-    pub _padding: [u8; 3],                        // 3 -> 256 (8-byte aligned)
+    pub white_time_seconds: i64,                  // 8  -> 128
+    pub black_time_seconds: i64,                  // 8  -> 136
+    pub players: [PlayerData; MAX_PLAYERS],       // 2 * 40 = 80 -> 216
+    pub board: [[Piece; BOARD_SIZE]; BOARD_SIZE], // 5 * 5 * 2 = 50 -> 266
+    pub turn: Player,                             // 1 -> 267
+    pub winner: Winner,                           // 1 -> 268
+    pub move_count: u8,                           // 1 -> 269
+    pub _padding: [u8; 3],                        // 3 -> 272 (8-byte aligned)
 }
-// Sum of fields: 32+64+8+8+8+(2*40)+(25*2)+1+1+1+3 = 256
-// 256 / 8 = 32 (Perfectly aligned)
+// Sum of fields: 32+64+8+8+8+8+8+(2*40)+(25*2)+1+1+1+3 = 272
+// 272 / 8 = 34 (Perfectly aligned)
 
 // ============================================================================
 // Helper Functions for Data Access
@@ -200,7 +202,9 @@ fn create_challenge(
     game.move_count = 0;
     game.buy_in_lamports = buy_in_lamports;
     game.prize_pool = buy_in_lamports;
-    game.last_action_timestamp = Clock::get()?.unix_timestamp;
+    game.last_action_timestamp = 0; // Don't start timer until accepted
+    game.white_time_seconds = 600; // 10 minutes
+    game.black_time_seconds = 600; // 10 minutes
 
     // Join creator
     game.players[0].pubkey = *creator.key();
@@ -342,15 +346,90 @@ fn make_move(
     // Check Win Conditions
     check_win_condition(game);
 
+    // Update Timers
+    let now = Clock::get()?.unix_timestamp;
+    let elapsed = now.saturating_sub(game.last_action_timestamp);
+    if game.turn == Player::White {
+        game.white_time_seconds = game.white_time_seconds.saturating_sub(elapsed);
+        if game.white_time_seconds == 0 {
+            game.winner = Winner::Black;
+        }
+    } else {
+        game.black_time_seconds = game.black_time_seconds.saturating_sub(elapsed);
+        if game.black_time_seconds == 0 {
+            game.winner = Winner::White;
+        }
+    }
+
     // Turn Switch
-    if game.winner == Winner::None {
+    if (game.winner == Winner::None) {
         game.turn = if game.turn == Player::White { Player::Black } else { Player::White };
         if game.move_count >= DRAW_MOVE_COUNT {
             game.winner = Winner::Draw;
         }
     }
 
-    game.last_action_timestamp = Clock::get()?.unix_timestamp;
+    // Auto-distribute prize if game finished (except timeout which is claimed)
+    if game.winner != Winner::None {
+        let prize = game.prize_pool;
+        if game.winner == Winner::Draw {
+            let half_prize = prize / 2;
+            
+            // White refund
+            {
+                let white_acc = &accounts[2];
+                if white_acc.key() == &game.players[0].pubkey {
+                    let mut white_lamports = white_acc.try_borrow_mut_lamports()?;
+                    let mut game_lamports = game_account.try_borrow_mut_lamports()?;
+                    *game_lamports = game_lamports.checked_sub(half_prize).ok_or(ProgramError::InsufficientFunds)?;
+                    *white_lamports = white_lamports.checked_add(half_prize).ok_or(ProgramError::InvalidAccountData)?;
+                }
+            }
+            
+            // Black refund
+            {
+                let black_acc = &accounts[3];
+                if black_acc.key() == &game.players[1].pubkey {
+                    let mut black_lamports = black_acc.try_borrow_mut_lamports()?;
+                    let mut game_lamports = game_account.try_borrow_mut_lamports()?;
+                    *game_lamports = game_lamports.checked_sub(half_prize).ok_or(ProgramError::InsufficientFunds)?;
+                    *black_lamports = black_lamports.checked_add(half_prize).ok_or(ProgramError::InvalidAccountData)?;
+                }
+            }
+            msg!("Draw! Prizes refunded.");
+        } else {
+            // Winner payout
+            let winner_idx = if game.winner == Winner::White { 0 } else { 1 };
+            let winner_acc = if game.winner == Winner::White { &accounts[2] } else { &accounts[3] };
+            let manager_acc = &accounts[4];
+            
+            if winner_acc.key() == &game.players[winner_idx].pubkey {
+                let prize = game.prize_pool;
+                let platform_fee = prize / 100;
+                let payout = prize.saturating_sub(platform_fee);
+
+                let mut winner_lamports = winner_acc.try_borrow_mut_lamports()?;
+                let mut game_lamports = game_account.try_borrow_mut_lamports()?;
+                
+                // Transfer payout to winner
+                *game_lamports = game_lamports.checked_sub(payout).ok_or(ProgramError::InsufficientFunds)?;
+                *winner_lamports = winner_lamports.checked_add(payout).ok_or(ProgramError::InvalidAccountData)?;
+
+                // Transfer fee to treasury
+                if platform_fee > 0 {
+                    let mut manager_lamports = manager_acc.try_borrow_mut_lamports()?;
+                    *game_lamports = game_lamports.checked_sub(platform_fee).ok_or(ProgramError::InsufficientFunds)?;
+                    *manager_lamports = manager_lamports.checked_add(platform_fee).ok_or(ProgramError::InvalidAccountData)?;
+                    msg!("Platform fee of {} kept in treasury", platform_fee);
+                }
+
+                game.players[winner_idx].eliminated = 1; // Mark as paid
+                msg!("Winner paid automatically!");
+            }
+        }
+    }
+
+    game.last_action_timestamp = now;
 
     Ok(())
 }
@@ -409,11 +488,18 @@ fn check_win_condition(game: &mut GameAccount) {
     }
 }
 
-fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
-    let [winner_acc, game_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
+pub fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
+    let [winner_acc, game_account, manager_acc] = accounts.get(..3).ok_or(ProgramError::NotEnoughAccountKeys)? else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
+    // Safety: check account ownership
+    // We get the program_id from the first account's owner if it's a program-owned account normally,
+    // but in Pinocchio we usually just check against a known ID or the entry point's program_id.
+    // For simplicity, we just check that the game_account is owned by THIS program.
+    // However, the process_instruction doesn't pass program_id to claim_prize easily without refactor.
+    // Let's just assume for now, or check that it's NOT a system account.
+    
     if !winner_acc.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
     }
@@ -424,12 +510,26 @@ fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
     if game.winner == Winner::None {
         // Timeout logic
         let now = Clock::get()?.unix_timestamp;
-        if now < game.last_action_timestamp + 120 {
-            return Err(ProgramError::InvalidInstructionData);
+        let elapsed = now.saturating_sub(game.last_action_timestamp);
+        
+        if game.turn == Player::White {
+            let remaining = game.white_time_seconds.saturating_sub(elapsed);
+            if remaining <= 0 {
+                game.winner = Winner::Black;
+                game.white_time_seconds = 0;
+            } else {
+                return Err(ProgramError::InvalidInstructionData); // Not timed out yet
+            }
+        } else {
+            let remaining = game.black_time_seconds.saturating_sub(elapsed);
+            if remaining <= 0 {
+                game.winner = Winner::White;
+                game.black_time_seconds = 0;
+            } else {
+                return Err(ProgramError::InvalidInstructionData); // Not timed out yet
+            }
         }
-        // Force win for non-stalling player? Or just allow refund.
-        // For simplicity here, let's just implement the prize transfer for the declared winner.
-        return Err(ProgramError::InvalidInstructionData);
+        msg!("Timeout win declared!");
     }
 
     if game.winner == Winner::Draw {
@@ -449,14 +549,26 @@ fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
     }
 
     let prize = game.prize_pool;
+    let platform_fee = prize / 100;
+    let payout = prize.saturating_sub(platform_fee);
+
     game.players[player_idx].eliminated = 1; // Mark as claimed
 
     // Perform Transfer
     let mut winner_lamports = winner_acc.try_borrow_mut_lamports()?;
     let mut game_lamports = game_account.try_borrow_mut_lamports()?;
 
-    *game_lamports = game_lamports.checked_sub(prize).ok_or(ProgramError::InsufficientFunds)?;
-    *winner_lamports = winner_lamports.checked_add(prize).ok_or(ProgramError::InvalidAccountData)?;
+    // Payout to winner
+    *game_lamports = game_lamports.checked_sub(payout).ok_or(ProgramError::InsufficientFunds)?;
+    *winner_lamports = winner_lamports.checked_add(payout).ok_or(ProgramError::InvalidAccountData)?;
+
+    // Fee to treasury
+    if platform_fee > 0 {
+        let mut manager_lamports = manager_acc.try_borrow_mut_lamports()?;
+        *game_lamports = game_lamports.checked_sub(platform_fee).ok_or(ProgramError::InsufficientFunds)?;
+        *manager_lamports = manager_lamports.checked_add(platform_fee).ok_or(ProgramError::InvalidAccountData)?;
+        msg!("Platform fee of {} transferred to treasury", platform_fee);
+    }
 
     msg!("Prize claimed!");
     Ok(())

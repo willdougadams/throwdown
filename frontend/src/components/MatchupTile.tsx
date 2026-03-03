@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { theme } from '../theme';
 import { MatchupPlayer } from './MatchupPlayer';
 import { Matchup, MatchState } from '../types/game';
@@ -20,6 +21,7 @@ export function MatchupTile({
   onRefresh,
   onJoin
 }: MatchupTileProps) {
+  const { t } = useTranslation();
   const { player1, player2, matchState, isCurrentUserInMatch, gameId, gameState } = matchup;
 
   const getStateColor = () => {
@@ -35,12 +37,12 @@ export function MatchupTile({
 
   const getStateText = () => {
     switch (matchState) {
-      case 'waiting_for_players': return 'Waiting for Players';
-      case 'ready_to_play': return 'Ready to Play';
-      case 'waiting_for_moves': return 'Submitting Moves';
-      case 'waiting_for_reveals': return 'Revealing Moves';
-      case 'completed': return 'Completed';
-      default: return 'Unknown';
+      case 'waiting_for_players': return t('rps.match_states.waiting_for_players');
+      case 'ready_to_play': return t('rps.match_states.ready_to_play');
+      case 'waiting_for_moves': return t('rps.match_states.waiting_for_moves');
+      case 'waiting_for_reveals': return t('rps.match_states.waiting_for_reveals');
+      case 'completed': return t('rps.match_states.completed');
+      default: return t('rps.match_states.unknown');
     }
   };
 
@@ -89,7 +91,7 @@ export function MatchupTile({
         marginBottom: theme.spacing.md
       }}>
         {getStateText()}
-        {isClickable && ' - Click to Play'}
+        {isClickable && ` - ${t('rps.match_states.click_to_play')}`}
       </div>
 
       {/* Player 1 */}

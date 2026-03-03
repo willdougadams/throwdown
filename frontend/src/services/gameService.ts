@@ -30,7 +30,7 @@ export class GameService {
     async fetchAllGames(programType: 'rps' | 'chess' = 'rps'): Promise<GameIndexEntry[]> {
         try {
             const programId = getProgramId(programType);
-            const dataSize = programType === 'chess' ? 256 : 528;
+            const dataSize = programType === 'chess' ? 272 : 528;
 
             console.log(`Fetching all ${programType} game accounts (size: ${dataSize})...`);
 

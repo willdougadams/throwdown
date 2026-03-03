@@ -1,8 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Circle, FileText, Scissors, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Circle, FileText, Scissors, X, ChevronLeft, ChevronRight, Zap, Wind, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { theme } from '../theme';
 
-type Move = 'rock' | 'paper' | 'scissors';
+type Move = 'rock' | 'paper' | 'scissors' | 'fury' | 'serenity' | 'trickery';
 
 interface MoveSubmissionModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export function MoveSubmissionModal({
   onSubmitMoves,
   onRevealMoves
 }: MoveSubmissionModalProps) {
+  const { t } = useTranslation();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const moveRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
@@ -200,7 +202,7 @@ export function MoveSubmissionModal({
                     fontSize: theme.fontSize['2xl'],
                     fontWeight: theme.fontWeight.bold
                   }}>
-                    Move {index + 1}
+                    {t('rps.game.move_n', { n: index + 1 })}
                   </h3>
                   <p style={{
                     color: theme.colors.text.secondary,
@@ -208,10 +210,12 @@ export function MoveSubmissionModal({
                     fontSize: theme.fontSize.sm
                   }}>
                     {selectedMoves[index]
-                      ? `Selected: ${selectedMoves[index]}`
-                      : 'Choose your move'}
+                      ? t('rps.game.selected_move', { move: t(`rps.game.moves.${selectedMoves[index]}`) })
+                      : t('rps.game.choose_move')}
                   </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+                  {/* Basic Moves */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                     {(['rock', 'paper', 'scissors'] as const).map((move) => {
                       const Icon = move === 'rock' ? Circle : move === 'paper' ? FileText : Scissors;
                       const isSelected = selectedMoves[index] === move;
@@ -220,36 +224,78 @@ export function MoveSubmissionModal({
                           key={`${index}-${move}`}
                           onClick={() => handleMoveSelectWithScroll(index, move as Move)}
                           style={{
-                            padding: '1.5rem',
+                            aspectRatio: '1',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
                             backgroundColor: isSelected ? '#2196F3' : theme.colors.tertiary,
                             color: isSelected ? 'white' : theme.colors.text.primary,
                             border: `3px solid ${isSelected ? '#2196F3' : theme.colors.border}`,
                             borderRadius: '12px',
                             cursor: 'pointer',
-                            fontSize: theme.fontSize.lg,
+                            fontSize: theme.fontSize.sm,
                             fontWeight: theme.fontWeight.bold,
                             transition: 'all 0.2s ease',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '1rem'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.backgroundColor = theme.colors.surface;
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.backgroundColor = theme.colors.tertiary;
-                            }
                           }}
                         >
                           <Icon size={32} fill={move === 'rock' ? 'currentColor' : 'none'} />
-                          <span style={{ textTransform: 'capitalize' }}>{move}</span>
+                          <span style={{ textTransform: 'capitalize' }}>{t(`rps.game.moves.${move}`)}</span>
                         </button>
                       );
                     })}
+                  </div>
+
+                  {/* Strategies - only available after first move */}
+                  <div style={{
+                    marginTop: '1.5rem',
+                    opacity: index === 0 ? 0.4 : 1,
+                    pointerEvents: index === 0 ? 'none' : 'auto'
+                  }}>
+                    <p style={{
+                      color: theme.colors.text.secondary,
+                      fontSize: '0.8rem',
+                      marginBottom: '0.8rem',
+                      textAlign: 'left',
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1px'
+                    }}>
+                      {t('rps.game.strategies_label', { defaultValue: 'Strategies' })}
+                      {index === 0 && ` (${t('rps.game.unavailable_round1', { defaultValue: 'Unavailable Round 1' })})`}
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                      {(['fury', 'serenity', 'trickery'] as const).map((strategy) => {
+                        const Icon = strategy === 'fury' ? Zap : strategy === 'serenity' ? Wind : Sparkles;
+                        const isSelected = selectedMoves[index] === strategy;
+                        return (
+                          <button
+                            key={`${index}-${strategy}`}
+                            onClick={() => handleMoveSelectWithScroll(index, strategy as Move)}
+                            style={{
+                              aspectRatio: '1',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.5rem',
+                              backgroundColor: isSelected ? '#9c27b0' : theme.colors.tertiary,
+                              color: isSelected ? 'white' : theme.colors.text.primary,
+                              border: `3px solid ${isSelected ? '#9c27b0' : theme.colors.border}`,
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              fontSize: theme.fontSize.sm,
+                              fontWeight: theme.fontWeight.bold,
+                              transition: 'all 0.2s ease',
+                            }}
+                          >
+                            <Icon size={32} fill={strategy === 'fury' ? 'currentColor' : 'none'} />
+                            <span style={{ textTransform: 'capitalize' }}>{t(`rps.game.moves.${strategy}`)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -275,15 +321,15 @@ export function MoveSubmissionModal({
                   fontSize: theme.fontSize['2xl'],
                   fontWeight: theme.fontWeight.bold
                 }}>
-                  {selectedMoves.length === 5 ? 'Ready to Submit!' : 'Select All Moves'}
+                  {selectedMoves.length === 5 ? t('rps.game.ready_submit') : t('rps.game.select_all_prompt')}
                 </h3>
                 <p style={{
                   color: theme.colors.text.secondary,
                   fontSize: theme.fontSize.md
                 }}>
                   {selectedMoves.length === 5
-                    ? 'Your moves will be hidden until the reveal phase.'
-                    : `You've selected ${selectedMoves.length}/5 moves`}
+                    ? t('rps.game.hidden_note')
+                    : t('rps.game.moves_selected_count', { count: selectedMoves.length })}
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <button
@@ -304,7 +350,7 @@ export function MoveSubmissionModal({
                       opacity: selectedMoves.length === 5 ? 1 : 0.6
                     }}
                   >
-                    Submit Moves ({selectedMoves.length}/5)
+                    {t('rps.game.submit_moves_btn', { count: selectedMoves.length })}
                   </button>
                   <button
                     onClick={onClose}
@@ -319,7 +365,7 @@ export function MoveSubmissionModal({
                       fontWeight: theme.fontWeight.semibold
                     }}
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                 </div>
               </div>
@@ -386,7 +432,7 @@ export function MoveSubmissionModal({
         {gameState === 'in_progress' && hasUserSubmittedMoves && !hasUserRevealedMoves && (
           <div>
             <h2 style={{ color: theme.colors.text.primary, marginBottom: '1.5rem', textAlign: 'center' }}>
-              {hasOpponentSubmittedMoves ? 'Reveal Your Moves' : 'Waiting for Opponent'}
+              {hasOpponentSubmittedMoves ? t('rps.game.reveal_title') : t('rps.game.waiting_opponent_title')}
             </h2>
 
             {(selectedMoves.length !== 5 || !moveSalt) ? (
@@ -399,22 +445,21 @@ export function MoveSubmissionModal({
                 marginBottom: '2rem'
               }}>
                 <p style={{ color: theme.colors.error, fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                  Moves Not Found Locally
+                  {t('rps.game.moves_not_found')}
                 </p>
                 <p style={{ color: theme.colors.text.secondary, fontSize: '0.9rem' }}>
-                  It looks like the moves you committed for this challenge are not in your browser's local storage.
-                  This can happen if you cleared your cache, are on a different device, or used a different browser.
+                  {t('rps.game.moves_not_found_desc')}
                 </p>
                 <p style={{ color: theme.colors.text.secondary, fontSize: '0.9rem', marginTop: '1rem' }}>
-                  Without the original salt and moves, you won't be able to reveal.
+                  {t('rps.game.moves_not_found_note')}
                 </p>
               </div>
             ) : (
               <>
                 <p style={{ color: theme.colors.text.secondary, marginBottom: '2rem', textAlign: 'center' }}>
                   {hasOpponentSubmittedMoves
-                    ? 'Time to reveal the moves you submitted.'
-                    : 'Your opponent must commit their moves before you can reveal.'}
+                    ? t('rps.game.reveal_desc')
+                    : t('rps.game.reveal_wait_desc')}
                 </p>
 
                 <div style={{
@@ -425,23 +470,27 @@ export function MoveSubmissionModal({
                   flexWrap: 'wrap'
                 }}>
                   {selectedMoves.map((move, index) => {
-                    const Icon = move === 'rock' ? Circle : move === 'paper' ? FileText : Scissors;
+                    const Icon = move === 'rock' ? Circle :
+                      move === 'paper' ? FileText :
+                        move === 'scissors' ? Scissors :
+                          move === 'fury' ? Zap :
+                            move === 'serenity' ? Wind :
+                              Sparkles;
                     return (
                       <div key={index} style={{ textAlign: 'center' }}>
                         <div style={{
                           marginBottom: '0.5rem',
                           display: 'flex',
                           justifyContent: 'center',
-                          color: theme.colors.text.primary
+                          color: move === 'fury' || move === 'serenity' || move === 'trickery' ? '#9c27b0' : theme.colors.text.primary
                         }}>
-                          <Icon size={48} fill={move === 'rock' ? 'currentColor' : 'none'} />
+                          <Icon size={48} fill={(move === 'rock' || move === 'fury') ? 'currentColor' : 'none'} />
                         </div>
                         <div style={{
                           fontSize: '0.9rem',
-                          color: theme.colors.text.secondary,
-                          textTransform: 'capitalize'
+                          color: theme.colors.text.secondary
                         }}>
-                          {move}
+                          {t(`rps.game.moves.${move}`)}
                         </div>
                       </div>
                     );
@@ -464,7 +513,7 @@ export function MoveSubmissionModal({
                   fontWeight: 'bold'
                 }}
               >
-                {(selectedMoves.length !== 5 || !moveSalt) ? 'Close' : 'Cancel'}
+                {t('common.cancel')}
               </button>
               {selectedMoves.length === 5 && moveSalt && (
                 <button
@@ -485,7 +534,7 @@ export function MoveSubmissionModal({
                     opacity: hasOpponentSubmittedMoves ? 1 : 0.6
                   }}
                 >
-                  {hasOpponentSubmittedMoves ? 'Reveal Moves' : 'Waiting for Opponent'}
+                  {hasOpponentSubmittedMoves ? t('rps.game.reveal_title') : t('rps.game.waiting_opponent_title')}
                 </button>
               )}
             </div>
@@ -498,11 +547,11 @@ export function MoveSubmissionModal({
           hasUserRevealedMoves
         ) && (
             <div style={{ textAlign: 'center', padding: '2rem' }}>
-              <h2 style={{ color: theme.colors.success, marginBottom: '1rem' }}>All Set!</h2>
+              <h2 style={{ color: theme.colors.success, marginBottom: '1rem' }}>{t('rps.game.all_set')}</h2>
               <p style={{ color: theme.colors.text.secondary }}>
                 {!hasUserRevealedMoves
-                  ? 'Waiting for opponent to submit their moves...'
-                  : 'Waiting for your matchup to be resolved...'}
+                  ? t('rps.game.waiting_opponent_submit')
+                  : t('rps.game.waiting_matchup_resolve')}
               </p>
             </div>
           )}

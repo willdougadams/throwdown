@@ -199,6 +199,7 @@ export class Web3ProgramClient {
       keys: [
         { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
         { pubkey: gameAccount, isSigner: false, isWritable: true },
+        { pubkey: this.getTreasuryPDA(), isSigner: false, isWritable: true },
       ],
       programId: this.programId,
       data: Buffer.from(instructionData),
@@ -242,6 +243,15 @@ export class Web3ProgramClient {
     }
   }
 
+  private getTreasuryPDA(): PublicKey {
+    const banyanProgramId = getProgramId('banyan');
+    const [pda] = PublicKey.findProgramAddressSync(
+      [Buffer.from('manager')],
+      banyanProgramId
+    );
+    return pda;
+  }
+
   // --- Idiot Chess Methods ---
 
   async createChessChallenge(params: { entryFee: number; gameName: string }): Promise<GameCreationResult> {
@@ -256,7 +266,7 @@ export class Web3ProgramClient {
     const buyInLamports = BigInt(Math.floor(params.entryFee * 1_000_000_000));
     const chessInstructionData = ChessTransactionPacker.packCreateChallenge(buyInLamports, params.gameName);
 
-    const gameSpace = 256;
+    const gameSpace = 272;
     const gameRent = await this.connection.getMinimumBalanceForRentExemption(gameSpace);
 
     const instructions = [];
@@ -352,12 +362,24 @@ export class Web3ProgramClient {
 
     const chessProgramId = getProgramId('chess');
     const gameAccount = new PublicKey(gameId);
+
+    // Fetch game data to get player pubkeys for automatic prize distribution
+    const accountInfo = await this.connection.getAccountInfo(gameAccount);
+    if (!accountInfo) throw new Error('Game account not found');
+
+    // Player White is at offset 144, Player Black is at offset 184 (40 bytes each: 32 for pubkey + 8 padding/status)
+    const playerWhite = new PublicKey(accountInfo.data.slice(144, 176));
+    const playerBlack = new PublicKey(accountInfo.data.slice(184, 216));
+
     const instructionData = ChessTransactionPacker.packMakeMove(fromX, fromY, toX, toY);
 
     const instruction = new TransactionInstruction({
       keys: [
         { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
         { pubkey: gameAccount, isSigner: false, isWritable: true },
+        { pubkey: playerWhite, isSigner: false, isWritable: true },
+        { pubkey: playerBlack, isSigner: false, isWritable: true },
+        { pubkey: this.getTreasuryPDA(), isSigner: false, isWritable: true },
       ],
       programId: chessProgramId,
       data: Buffer.from(instructionData),
@@ -388,6 +410,7 @@ export class Web3ProgramClient {
       keys: [
         { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
         { pubkey: gameAccount, isSigner: false, isWritable: true },
+        { pubkey: this.getTreasuryPDA(), isSigner: false, isWritable: true },
       ],
       programId: chessProgramId,
       data: Buffer.from(instructionData),
