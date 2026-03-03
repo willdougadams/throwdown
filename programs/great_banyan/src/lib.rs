@@ -1,12 +1,14 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use pinocchio::{
     account_info::AccountInfo,
     entrypoint,
     instruction::{AccountMeta, Instruction},
     program_error::ProgramError,
     pubkey::Pubkey, // [u8; 32]
+    msg,
     sysvars::{clock::Clock, rent::Rent, Sysvar},
 };
-use borsh::{BorshDeserialize, BorshSerialize};
+use bytemuck::{Pod, Zeroable};
 use solana_program::keccak;
 use solana_program::pubkey::Pubkey as SolPubkey;
 
@@ -31,15 +33,26 @@ pub struct TreeState {
     pub vitality_required_base: u64,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct Contribution {
+    pub key: [u8; 32],
+    pub vitality: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Bud {
     pub parent: [u8; 32],
     pub depth: u8,
+    pub _padding1: [u8; 7],
     pub vitality_current: u64,
     pub vitality_required: u64,
-    pub is_bloomed: bool,
-    pub is_fruit: bool,
-    pub contributions: Vec<([u8; 32], u64)>,
+    pub is_bloomed: u8, // u8 for Pod
+    pub is_fruit: u8,   // u8 for Pod
+    pub contribution_count: u8,
+    pub _padding2: [u8; 5],
+    pub contributions: [Contribution; 10],
 }
 
 // Fixed size for Bud to avoid realloc complexity in Pinocchio
@@ -75,6 +88,7 @@ pub fn process_instruction(
 
     match instruction {
         BanyanInstruction::InitializeGame => {
+            msg!("Instruction: InitializeGame");
             let payer = next_account_info(account_iter)?;
             let manager_info = next_account_info(account_iter)?;
             let system_program = next_account_info(account_iter)?;
@@ -170,13 +184,20 @@ pub fn process_instruction(
             let root_bud = Bud {
                 parent: [0u8; 32],
                 depth: 0,
+                _padding1: [0u8; 7],
                 vitality_current: 10, // Pre-nurtured
                 vitality_required: 10,
-                is_bloomed: false,
-                is_fruit: false,
-                contributions: vec![(*payer.key(), 10)], // Authority is the nurturer
+                is_bloomed: 0,
+                is_fruit: 0,
+                contribution_count: 1,
+                _padding2: [0u8; 5],
+                contributions: {
+                    let mut c = [Contribution { key: [0u8; 32], vitality: 0 }; 10];
+                    c[0] = Contribution { key: *payer.key(), vitality: 10 };
+                    c
+                },
             };
-            let bud_data = borsh::to_vec(&root_bud).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let bud_data = bytemuck::bytes_of(&root_bud);
 
             create_account_with_space(
                 payer,
@@ -201,6 +222,14 @@ pub fn process_instruction(
                 return Err(ProgramError::MissingRequiredSignature);
             }
 
+            // Owner checks
+            if *manager_info.owner() != *program_id {
+                return Err(ProgramError::InvalidAccountData);
+            }
+            if *bud_info.owner() != *program_id {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
             // 1. Transfer to Manager
             let transfer_amount = 600_000;
             invoke_transfer(
@@ -215,7 +244,7 @@ pub fn process_instruction(
                 let data = manager_info.try_borrow_data()?;
                 GameManager::try_from_slice(&data).map_err(|_| ProgramError::InvalidAccountData)?
             };
-            manager.prize_pool += transfer_amount;
+            manager.prize_pool = manager.prize_pool.checked_add(transfer_amount).ok_or(ProgramError::ArithmeticOverflow)?;
             
             let serialized_manager = borsh::to_vec(&manager).map_err(|_| ProgramError::InvalidInstructionData)?;
             manager_info.try_borrow_mut_data()?[..serialized_manager.len()].copy_from_slice(&serialized_manager);
@@ -243,21 +272,33 @@ pub fn process_instruction(
             // Update Bud
             let mut bud = {
                 let data = bud_info.try_borrow_data()?;
-                Bud::deserialize(&mut &data[..]).map_err(|_| ProgramError::InvalidAccountData)?
+                *bytemuck::from_bytes::<Bud>(&data[..std::mem::size_of::<Bud>()])
             };
 
-            bud.vitality_current += vitality_gain;
+            bud.vitality_current = bud.vitality_current.saturating_add(vitality_gain);
             
             // Track contributions
             let signer_key = nurturer.key();
-            if let Some(contribution) = bud.contributions.iter_mut().find(|c| c.0 == *signer_key) {
-                contribution.1 += vitality_gain;
-            } else if bud.contributions.len() < 10 { // Limit to 10 unique nurturers
-                bud.contributions.push((*signer_key, vitality_gain));
+            let mut found = false;
+            for i in 0..bud.contribution_count as usize {
+                if bud.contributions[i].key == *signer_key {
+                    bud.contributions[i].vitality = bud.contributions[i].vitality.saturating_add(vitality_gain);
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found && (bud.contribution_count as usize) < 10 {
+                let idx = bud.contribution_count as usize;
+                bud.contributions[idx] = Contribution {
+                    key: *signer_key,
+                    vitality: vitality_gain,
+                };
+                bud.contribution_count += 1;
             }
 
             // 3. Auto-Bloom Logic
-            if bud.vitality_current >= bud.vitality_required && !bud.is_bloomed {
+            if bud.vitality_current >= bud.vitality_required && bud.is_bloomed == 0 {
                 // Check for required extra accounts
                 // Expected order: TreeState, LeftChild, RightChild
                 // Note: The iterator has already consumed 4 accounts (nurturer, manager, bud, system_program)
@@ -287,18 +328,19 @@ pub fn process_instruction(
                 let randomness = u64::from_le_bytes(bud_hash.0[0..8].try_into().unwrap());
                 
                 if randomness % tree_state.fruit_frequency == 0 {
-                     bud.is_fruit = true;
+                     bud.is_fruit = 1;
                 }
     
-                bud.is_bloomed = true;
+                bud.is_bloomed = 1;
                 
-                if bud.is_fruit {
+                if bud.is_fruit != 0 {
                     // WIN CONDITION - Proportional Payout
                     let prize = manager.prize_pool;
                     if prize > 0 {
                         let total_vitality = bud.vitality_current;
-                        for (pubkey, contribution) in &bud.contributions {
-                            let share = (prize * contribution) / total_vitality;
+                        for i in 0..bud.contribution_count as usize {
+                            let contribution = &bud.contributions[i];
+                            let share = (prize * contribution.vitality) / total_vitality;
                             if share > 0 {
                                 // Since we don't have all nurturer accounts in the instruction,
                                 // we can only payout if they are the current nurturer or we'd need more accounts.
@@ -326,6 +368,12 @@ pub fn process_instruction(
 
                         // Expected order for fruit payout: ... Left, Right, Authority
                         let authority_info = next_account_info(account_iter)?;
+                        
+                        // Owner check for authority_info (Manager's authority)
+                        // Actually authority is just the target pubkey, but let's check it matches manager
+                        if *authority_info.key() != manager.authority {
+                            return Err(ProgramError::InvalidAccountData);
+                        }
 
                         if platform_fee > 0 {
                             *manager_info.try_borrow_mut_lamports()? -= platform_fee;
@@ -361,11 +409,14 @@ pub fn process_instruction(
                     let left_child = Bud {
                         parent: *bud_info.key(),
                         depth: child_depth,
+                        _padding1: [0u8; 7],
                         vitality_current: 1,
                         vitality_required: 10,
-                        is_bloomed: false,
-                        is_fruit: false,
-                        contributions: Vec::new(),
+                        is_bloomed: 0,
+                        is_fruit: 0,
+                        contribution_count: 0,
+                        _padding2: [0u8; 5],
+                        contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
                     };
                     
                     create_account_with_space(
@@ -373,7 +424,7 @@ pub fn process_instruction(
                         left_child_info,
                         system_program,
                         program_id,
-                        &borsh::to_vec(&left_child).unwrap(),
+                        bytemuck::bytes_of(&left_child),
                         BUD_SIZE,
                         &[b"bud", bud_info.key(), b"left", &[left_bump]],
                     )?;
@@ -389,11 +440,14 @@ pub fn process_instruction(
                     let right_child = Bud {
                         parent: *bud_info.key(),
                         depth: child_depth,
+                        _padding1: [0u8; 7],
                         vitality_current: 1,
                         vitality_required: 10,
-                        is_bloomed: false,
-                        is_fruit: false,
-                        contributions: Vec::new(),
+                        is_bloomed: 0,
+                        is_fruit: 0,
+                        contribution_count: 0,
+                        _padding2: [0u8; 5],
+                        contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
                     };
                     
                     create_account_with_space(
@@ -401,19 +455,19 @@ pub fn process_instruction(
                         right_child_info,
                         system_program,
                         program_id,
-                        &borsh::to_vec(&right_child).unwrap(),
+                        bytemuck::bytes_of(&right_child),
                         BUD_SIZE,
                         &[b"bud", bud_info.key(), b"right", &[right_bump]],
                     )?;
                 }
             }
             
-            let new_data = borsh::to_vec(&bud).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let new_data = bytemuck::bytes_of(&bud);
             if new_data.len() > bud_info.data_len() {
                  return Err(ProgramError::AccountDataTooSmall); 
             }
              
-            bud_info.try_borrow_mut_data()?[..new_data.len()].copy_from_slice(&new_data);
+            bud_info.try_borrow_mut_data()?[..new_data.len()].copy_from_slice(new_data);
 
             Ok(())
         }
@@ -564,16 +618,33 @@ pub fn process_instruction_test(
     accounts: &[solana_program::account_info::AccountInfo],
     instruction_data: &[u8],
 ) -> solana_program::entrypoint::ProgramResult {
-    // Safety: SolPubkey is repr(transparent) over [u8; 32]
-    // AccountInfo layout is compatible between Pinocchio and Solana Program (mostly)
-    let program_id_bytes: &[u8; 32] = unsafe { std::mem::transmute(program_id) };
-    let accounts_pinocchio: &[AccountInfo] = unsafe { std::mem::transmute(accounts) };
+    use solana_program::msg as sol_msg;
+    sol_msg!("Test: Entering process_instruction_test");
+
+    // Map Solana Pubkey to Pinocchio Pubkey ([u8; 32])
+    let program_id_bytes: [u8; 32] = program_id.to_bytes();
     
-    match process_instruction(program_id_bytes, accounts_pinocchio, instruction_data) {
-        Ok(()) => Ok(()),
+    // Map Solana AccountInfo to Pinocchio AccountInfo
+    // Pinocchio's AccountInfo is a struct with raw pointers.
+    // We transmute the pointers individually.
+    let mut pinocchio_accounts = Vec::with_capacity(accounts.len());
+    for account in accounts {
+        let p_account = unsafe {
+            // This is the literal definition of Pinocchio's AccountInfo in 0.5
+            std::mem::transmute_copy::<solana_program::account_info::AccountInfo, AccountInfo>(account)
+        };
+        pinocchio_accounts.push(p_account);
+    }
+
+    sol_msg!("Test: Calling process_instruction");
+    match process_instruction(&program_id_bytes, &pinocchio_accounts, instruction_data) {
+        Ok(()) => {
+            sol_msg!("Test: process_instruction success");
+            Ok(())
+        },
         Err(e) => {
-             // Pinocchio ProgramError -> u64. Solana Custom -> u32.
              let code: u64 = e.into();
+             sol_msg!("Test: process_instruction error: {}", code);
              Err(solana_program::program_error::ProgramError::Custom(code as u32))
         },
     }

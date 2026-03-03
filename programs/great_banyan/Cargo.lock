@@ -1575,6 +1575,7 @@ name = "great-banyan"
 version = "0.1.0"
 dependencies = [
  "borsh 1.6.0",
+ "bytemuck",
  "pinocchio",
  "solana-program",
  "solana-program-test",

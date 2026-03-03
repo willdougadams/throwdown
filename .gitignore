@@ -11,3 +11,4 @@ dev-dist
 test-wallets/**
 test-ledger
 .vercel
+keys/*.json

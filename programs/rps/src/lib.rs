@@ -207,7 +207,7 @@ pub fn process_instruction(
             let name_len = instruction_data[41] as usize;
             let name = &instruction_data[42..42 + name_len];
             
-            create_challenge(accounts, buy_in, moves_hash, name)
+            create_challenge(_program_id, accounts, buy_in, moves_hash, name)
         }
         1 => {
             // AcceptChallenge: [0] disc, [1..6] moves
@@ -228,7 +228,7 @@ pub fn process_instruction(
                 return Err(ProgramError::InvalidInstructionData);
             }
 
-            accept_challenge(accounts, moves)
+            accept_challenge(_program_id, accounts, moves)
         }
         2 => {
             // RevealMoves: [0] disc, [1..6] moves, [6..14] salt
@@ -250,9 +250,9 @@ pub fn process_instruction(
             }
 
             let salt = u64::from_le_bytes(instruction_data[6..14].try_into().unwrap());
-            reveal_moves(accounts, moves, salt)
+            reveal_moves(_program_id, accounts, moves, salt)
         }
-        3 => claim_prize(accounts),
+        3 => claim_prize(_program_id, accounts),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -407,6 +407,7 @@ fn resolve_match(player1: &PlayerData, player2: &PlayerData) -> Option<u8> {
 // ============================================================================
 
 fn create_challenge(
+    program_id: &Pubkey,
     accounts: &[AccountInfo],
     buy_in_lamports: u64,
     moves_hash: [u8; 32],
@@ -418,6 +419,11 @@ fn create_challenge(
 
     if !creator.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
+    }
+    
+    // Check owner
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
     }
 
     let mut data = game_account.try_borrow_mut_data()?;
@@ -443,13 +449,18 @@ fn create_challenge(
     Ok(())
 }
 
-fn accept_challenge(accounts: &[AccountInfo], moves: [Move; 5]) -> ProgramResult {
+fn accept_challenge(program_id: &Pubkey, accounts: &[AccountInfo], moves: [Move; 5]) -> ProgramResult {
     let [player, game_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
     if !player.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // Check owner
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
     }
 
     let mut data = game_account.try_borrow_mut_data()?;
@@ -470,7 +481,7 @@ fn accept_challenge(accounts: &[AccountInfo], moves: [Move; 5]) -> ProgramResult
 
     set_current_players(&mut data, 2);
     let prize = get_prize_pool(&data);
-    set_prize_pool(&mut data, prize + buy_in);
+    set_prize_pool(&mut data, prize.checked_add(buy_in).ok_or(ProgramError::ArithmeticOverflow)?);
     set_state(&mut data, GameState::InProgress); // Challenge accepted, now creator must reveal
     set_last_action_timestamp(&mut data, Clock::get()?.unix_timestamp);
 
@@ -478,13 +489,18 @@ fn accept_challenge(accounts: &[AccountInfo], moves: [Move; 5]) -> ProgramResult
     Ok(())
 }
 
-fn reveal_moves(accounts: &[AccountInfo], moves: [Move; 5], salt: u64) -> ProgramResult {
+fn reveal_moves(program_id: &Pubkey, accounts: &[AccountInfo], moves: [Move; 5], salt: u64) -> ProgramResult {
     let [player, game_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
     if !player.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // Check owner
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
     }
 
     let mut data = game_account.try_borrow_mut_data()?;
@@ -541,13 +557,15 @@ fn reveal_moves(accounts: &[AccountInfo], moves: [Move; 5], salt: u64) -> Progra
 
 // Matchmaking pool logic removed in favor of Challenge/Accept model
 
-fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
+fn claim_prize(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     let [winner, game_account, manager_info] = accounts.get(..3).ok_or(ProgramError::NotEnoughAccountKeys)? else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    // Note: Implicitly checked by attempting to borrow data from account
-    // but we should verify the owner is this program if we had program_id.
+    // Check owner
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
+    }
     
     if !winner.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);

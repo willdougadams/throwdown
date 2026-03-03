@@ -136,15 +136,16 @@ pub fn process_instruction(
             let buy_in = u64::from_le_bytes(instruction_data[1..9].try_into().unwrap());
             let name_len = instruction_data[9] as usize;
             let name = &instruction_data[10..10 + name_len];
-            create_challenge(accounts, buy_in, name)
+            create_challenge(_program_id, accounts, buy_in, name)
         }
-        1 => accept_challenge(accounts),
+        1 => accept_challenge(_program_id, accounts),
         2 => {
             // MakeMove: [0] disc, [1] from_x, [2] from_y, [3] to_x, [4] to_y
             if instruction_data.len() < 5 {
                 return Err(ProgramError::InvalidInstructionData);
             }
             make_move(
+                _program_id,
                 accounts,
                 instruction_data[1],
                 instruction_data[2],
@@ -152,7 +153,7 @@ pub fn process_instruction(
                 instruction_data[4],
             )
         }
-        3 => claim_prize(accounts),
+        3 => claim_prize(_program_id, accounts),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -162,6 +163,7 @@ pub fn process_instruction(
 // ============================================================================
 
 fn create_challenge(
+    program_id: &Pubkey,
     accounts: &[AccountInfo],
     buy_in_lamports: u64,
     name: &[u8],
@@ -172,6 +174,11 @@ fn create_challenge(
 
     if !creator.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // Check owner
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
     }
 
     let mut data = game_account.try_borrow_mut_data()?;
@@ -214,13 +221,18 @@ fn create_challenge(
     Ok(())
 }
 
-fn accept_challenge(accounts: &[AccountInfo]) -> ProgramResult {
+fn accept_challenge(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     let [player, game_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
     if !player.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // Check owner
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
     }
 
     let mut data = game_account.try_borrow_mut_data()?;
@@ -232,7 +244,7 @@ fn accept_challenge(accounts: &[AccountInfo]) -> ProgramResult {
 
     game.players[1].pubkey = *player.key();
     game.players[1].eliminated = 0;
-    game.prize_pool += game.buy_in_lamports;
+    game.prize_pool = game.prize_pool.checked_add(game.buy_in_lamports).ok_or(ProgramError::ArithmeticOverflow)?;
     game.last_action_timestamp = Clock::get()?.unix_timestamp;
 
     msg!("Challenge accepted! Game in progress.");
@@ -240,6 +252,7 @@ fn accept_challenge(accounts: &[AccountInfo]) -> ProgramResult {
 }
 
 fn make_move(
+    program_id: &Pubkey,
     accounts: &[AccountInfo],
     from_x: u8,
     from_y: u8,
@@ -252,6 +265,11 @@ fn make_move(
 
     if !player.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // Check owner
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
     }
 
     let mut data = game_account.try_borrow_mut_data()?;
@@ -340,7 +358,7 @@ fn make_move(
         }
         game.move_count = 0; // Reset move count on capture
     } else {
-        game.move_count += 1;
+        game.move_count = game.move_count.saturating_add(1);
     }
 
     // Check Win Conditions
@@ -488,10 +506,15 @@ fn check_win_condition(game: &mut GameAccount) {
     }
 }
 
-pub fn claim_prize(accounts: &[AccountInfo]) -> ProgramResult {
+pub fn claim_prize(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     let [winner_acc, game_account, manager_acc] = accounts.get(..3).ok_or(ProgramError::NotEnoughAccountKeys)? else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
+
+    // Check owner
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
+    }
 
     // Safety: check account ownership
     // We get the program_id from the first account's owner if it's a program-owned account normally,

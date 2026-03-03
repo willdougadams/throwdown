@@ -7,11 +7,11 @@ use solana_program::{
     system_program,
     // sysvar::{clock::Clock, rent::Rent},
 };
+use solana_program::keccak;
 use solana_program_test::*;
 use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
-    keccak,
 };
 
 // Re-define structs/enums since we might not be able to import easily from cdylib or if types mismatch
@@ -107,8 +107,7 @@ async fn test_initialize_tree() {
     assert_eq!(tree_state.authority, payer.pubkey().to_bytes());
 
     let bud_account = banks_client.get_account(root_bud_pda).await.unwrap().unwrap();
-    let mut bud_data_slice = &bud_account.data[..];
-    let bud_state = Bud::deserialize(&mut bud_data_slice).unwrap();
+    let bud_state = bytemuck::from_bytes::<Bud>(&bud_account.data[..std::mem::size_of::<Bud>()]);
     assert_eq!(bud_state.vitality_required, vitality_required);
     assert_eq!(bud_state.depth, 0);
 }
@@ -168,6 +167,8 @@ async fn test_nurture_bud() {
     // 3. Nurture
     let nurture_ix = BanyanInstruction::NurtureBud {
         essence: "AGTC".to_string(),
+        nonce: 0,
+        mined_slot: 0,
     };
     let nurture_instruction = Instruction {
         program_id,
@@ -190,11 +191,10 @@ async fn test_nurture_bud() {
     assert_eq!(manager_state.prize_pool, 600_000); // 0.0006 SOL
 
     let bud_account = banks_client.get_account(root_bud_pda).await.unwrap().unwrap();
-    let mut bud_data_slice = &bud_account.data[..];
-    let bud_state = Bud::deserialize(&mut bud_data_slice).unwrap();
+    let bud_state = bytemuck::from_bytes::<Bud>(&bud_account.data[..std::mem::size_of::<Bud>()]);
     assert!(bud_state.vitality_current > 0);
-    assert_eq!(bud_state.nurturers.len(), 1);
-    assert_eq!(bud_state.nurturers[0], payer.pubkey().to_bytes());
+    assert_eq!(bud_state.contribution_count, 1);
+    assert_eq!(bud_state.contributions[0].key, payer.pubkey().to_bytes());
 }
 
 #[tokio::test]
@@ -255,7 +255,11 @@ async fn test_bloom_bud_win() {
     let (right_child_pda, _) = Pubkey::find_program_address(&[b"bud", root_bud_pda.as_ref(), b"right"], &program_id);
 
     for i in 0..10 {
-         let nurture_ix = BanyanInstruction::NurtureBud { essence: format!("AGTC-{}", i) };
+         let nurture_ix = BanyanInstruction::NurtureBud { 
+             essence: format!("AGTC-{}", i),
+             nonce: i as u64,
+             mined_slot: 0,
+         };
          
          // We can always pass the extra accounts, or only pass them when we expect to bloom.
          // Passing them always is safer/simpler for client logic mostly.
@@ -285,12 +289,11 @@ async fn test_bloom_bud_win() {
     // And bud should be bloomed.
 
     let bud_account = banks_client.get_account(root_bud_pda).await.unwrap().unwrap();
-    let mut bud_data_slice = &bud_account.data[..];
-    let bud_state = Bud::deserialize(&mut bud_data_slice).unwrap();
+    let bud_state = bytemuck::from_bytes::<Bud>(&bud_account.data[..std::mem::size_of::<Bud>()]);
     
     assert!(bud_state.vitality_current >= bud_state.vitality_required);
-    assert!(bud_state.is_bloomed);
-    assert!(bud_state.is_fruit); // Should be fruit because fruit_frequency = 1
+    assert!(bud_state.is_bloomed != 0);
+    assert!(bud_state.is_fruit != 0); // Should be fruit because fruit_frequency = 1
     
     // Verify Manager Reset
     let manager_account = banks_client.get_account(manager_pda).await.unwrap().unwrap();

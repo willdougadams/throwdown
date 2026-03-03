@@ -39,10 +39,30 @@ async function deploy() {
             existingId = managerResult.stdout.trim();
         }
 
+        // 4. Resolve Signer
+        function getSigner(network) {
+            if (network === 'mainnet') {
+                return 'usb://ledger?key=0';
+            }
+            // Use local keyfile for devnet and localnet
+            // On Windows, the path is typically %AppData%\solana\id.json
+            // But solana CLI usually handles ~/.config/solana/id.json in WSL
+            const homeDir = process.env.HOME || process.env.USERPROFILE;
+            return path.join(homeDir, '.config', 'solana', 'id.json');
+        }
+
+        const signer = getSigner(network);
+        const keysDir = rootPath('keys');
+        if (!fs.existsSync(keysDir)) {
+            fs.mkdirSync(keysDir);
+        }
+        const keypairFile = path.join(keysDir, `${programDirName}-keypair.json`);
+
         if (network !== 'localnet' && existingId && existingId !== '11111111111111111111111111111111' && !forceNew) {
             console.log(`📦 Attempting to upgrade existing program: ${existingId}`);
+            console.log(`🔑 Using signer: ${signer}`);
             try {
-                await exec('solana', ['program', 'deploy', soFile, '--program-id', existingId]);
+                await exec('solana', ['program', 'deploy', soFile, '--program-id', existingId, '--keypair', signer]);
                 console.log('✅ Program upgraded successfully!');
                 process.exit(0);
             } catch (err) {
@@ -51,10 +71,9 @@ async function deploy() {
         }
 
         console.log('📦 Deploying fresh program...');
-        let deployArgs = ['program', 'deploy', soFile];
+        let deployArgs = ['program', 'deploy', soFile, '--keypair', signer];
 
         if (network !== 'localnet') {
-            const keypairFile = path.join(programPath, 'target', 'deploy', `${programDirName}-keypair.json`);
             if (!fs.existsSync(keypairFile)) {
                 console.log('🔑 Generating program keypair...');
                 await exec('solana-keygen', ['new', '-o', keypairFile, '--no-bip39-passphrase', '--silent']);
@@ -63,11 +82,11 @@ async function deploy() {
         }
 
         const deployResult = execWithCapture('solana', deployArgs);
-        console.log(deployResult.stdout);
+        if (deployResult.stdout) console.log(deployResult.stdout);
 
         if (deployResult.status !== 0) {
             console.error('❌ Deployment failed!');
-            console.error(deployResult.stderr);
+            if (deployResult.stderr) console.error(deployResult.stderr);
             process.exit(1);
         }
 

@@ -34,6 +34,18 @@ export class Web3ProgramClient {
     console.log(`[Web3ProgramClient] Initialized for ${program} on ${this.connection.rpcEndpoint} with ID: ${this.programId.toBase58()}`);
   }
 
+  // --- Constants for Program Account Offsets ---
+  private static readonly OFFSETS = {
+    RPS: {
+      BUY_IN_LAMPORTS: 368,
+    },
+    CHESS: {
+      BUY_IN_LAMPORTS: 112,
+      PLAYER_WHITE_PUBKEY: 136, // Corrected from 144
+      PLAYER_BLACK_PUBKEY: 176, // Corrected from 184
+    }
+  };
+
   async createChallenge(params: CreateChallengeParams): Promise<GameCreationResult> {
     if (!this.wallet.publicKey || !this.wallet.signTransaction) {
       throw new Error('Wallet not connected');
@@ -123,7 +135,7 @@ export class Web3ProgramClient {
     const accountInfo = await this.connection.getAccountInfo(gameAccount);
     if (!accountInfo) throw new Error('Challenge not found');
 
-    const buyInLamports = accountInfo.data.readBigUInt64LE(368);
+    const buyInLamports = accountInfo.data.readBigUInt64LE(Web3ProgramClient.OFFSETS.RPS.BUY_IN_LAMPORTS);
     const instructionData = TransactionPacker.packAcceptChallenge(moves as any);
 
     const transaction = new Transaction();
@@ -324,7 +336,10 @@ export class Web3ProgramClient {
     if (!accountInfo) throw new Error('Game not found');
 
     // buy_in_lamports is at offset 112 in Chess GameAccount
-    const buyInLamports = accountInfo.data.slice(112, 120).readBigUInt64LE(0);
+    const buyInLamports = accountInfo.data.slice(
+      Web3ProgramClient.OFFSETS.CHESS.BUY_IN_LAMPORTS,
+      Web3ProgramClient.OFFSETS.CHESS.BUY_IN_LAMPORTS + 8
+    ).readBigUInt64LE(0);
 
     const instructionData = ChessTransactionPacker.packAcceptChallenge();
 
@@ -367,9 +382,15 @@ export class Web3ProgramClient {
     const accountInfo = await this.connection.getAccountInfo(gameAccount);
     if (!accountInfo) throw new Error('Game account not found');
 
-    // Player White is at offset 144, Player Black is at offset 184 (40 bytes each: 32 for pubkey + 8 padding/status)
-    const playerWhite = new PublicKey(accountInfo.data.slice(144, 176));
-    const playerBlack = new PublicKey(accountInfo.data.slice(184, 216));
+    // Player White is at offset 136, Player Black is at offset 176
+    const playerWhite = new PublicKey(accountInfo.data.slice(
+      Web3ProgramClient.OFFSETS.CHESS.PLAYER_WHITE_PUBKEY,
+      Web3ProgramClient.OFFSETS.CHESS.PLAYER_WHITE_PUBKEY + 32
+    ));
+    const playerBlack = new PublicKey(accountInfo.data.slice(
+      Web3ProgramClient.OFFSETS.CHESS.PLAYER_BLACK_PUBKEY,
+      Web3ProgramClient.OFFSETS.CHESS.PLAYER_BLACK_PUBKEY + 32
+    ));
 
     const instructionData = ChessTransactionPacker.packMakeMove(fromX, fromY, toX, toY);
 
