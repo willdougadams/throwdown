@@ -98,7 +98,7 @@ async function main() {
 
     // --- Helpers ---
     const findGameManagerPda = () =>
-        PublicKey.findProgramAddressSync([Buffer.from("manager")], PROGRAM_ID);
+        PublicKey.findProgramAddressSync([Buffer.from("manager_v1")], PROGRAM_ID);
 
     const findTreePda = (epoch: bigint) => {
         const epochBuf = Buffer.alloc(8);
@@ -329,9 +329,8 @@ async function main() {
         console.log(`💰 Distributing rewards for node ${bud.address.toString().slice(0, 8)}...`);
 
         const [managerPda] = findGameManagerPda();
-        const [managerAuthority] = await connection.getAccountInfo(managerPda).then(i => {
+        await connection.getAccountInfo(managerPda).then(i => {
             if (!i) throw new Error("Manager not found");
-            return [new PublicKey(i.data.subarray(16, 48))]; // authority
         });
 
         // Collect all contributor accounts in order

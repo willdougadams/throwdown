@@ -121,7 +121,7 @@ pub fn process_instruction(
             }
             msg!("Payer is signer");
 
-            let seeds: &[&[u8]] = &[b"manager"];
+            let seeds: &[&[u8]] = &[b"manager_v1"];
             let (manager_pda, manager_bump) = find_pda(seeds, program_id);
             msg!("Manager PDA: {:?}, bump: {}", manager_pda, manager_bump);
             if manager_pda != *manager_info.key() {
@@ -146,7 +146,7 @@ pub fn process_instruction(
                 system_program,
                 program_id,
                 bytemuck::bytes_of(&manager),
-                &[b"manager", &[manager_bump]],
+                &[b"manager_v1", &[manager_bump]],
             )?;
 
             solana_program::msg!("Manager initialized successfully");

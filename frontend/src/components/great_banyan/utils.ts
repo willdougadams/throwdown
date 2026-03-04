@@ -6,7 +6,7 @@ export const PROGRAM_ID = new PublicKey(typeof netData === 'string' ? netData : 
 
 export const findGameManagerPda = (): [PublicKey, number] => {
     return PublicKey.findProgramAddressSync(
-        [new TextEncoder().encode('manager')],
+        [new TextEncoder().encode('manager_v1')],
         PROGRAM_ID
     );
 };
