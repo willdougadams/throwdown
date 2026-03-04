@@ -1,15 +1,16 @@
 import React from 'react';
 import { PublicKey } from '@solana/web3.js';
 import { theme } from '../../theme';
-import { BudAccount } from './utils';
+import { BudAccount, GameManagerAccount } from './utils';
 
 interface BudModalProps {
     isOpen: boolean;
     onClose: () => void;
     bud: BudAccount | null;
     budAddress: PublicKey | null;
+    gameManager: GameManagerAccount | null;
     onNurture: (essence: string) => void;
-    onBloom: () => void;
+    onDistributeReward: () => void;
     isProcessing: boolean;
 }
 
@@ -18,8 +19,9 @@ export const BudModal: React.FC<BudModalProps> = ({
     onClose,
     bud,
     budAddress,
+    gameManager,
     onNurture,
-    onBloom,
+    onDistributeReward,
     isProcessing
 }) => {
     if (!isOpen || !bud) return null;
@@ -28,6 +30,15 @@ export const BudModal: React.FC<BudModalProps> = ({
 
     const progress = Number(bud.vitalityRequired > 0n ? (bud.vitalityCurrent * 100n) / bud.vitalityRequired : 0n);
     const isReadyToBloom = bud.vitalityCurrent >= bud.vitalityRequired;
+
+    // Logic for showing Reward Distribution button:
+    // 1. Bud is bloomed and is fruit (or part of winning branch in future)
+    // 2. Payout is not complete
+    // 3. We are in a subsequent epoch (or the program allows current epoch distribution)
+    // Actually, per program logic: manager.last_fruit_epoch == manager.current_epoch - 1
+    const showDistribute = bud.isBloomed && !bud.isPayoutComplete &&
+        gameManager && gameManager.lastFruitEpoch === gameManager.currentEpoch - 1n &&
+        (bud.isFruit || true); // For now, we allow trigger on any bloomed node if payout not complete
 
     return (
         <div
@@ -110,58 +121,69 @@ export const BudModal: React.FC<BudModalProps> = ({
 
                 {!bud.isBloomed && (
                     <div style={{ paddingBottom: (bud.contributions && bud.contributions.length > 0) ? '1.5rem' : 0 }}>
-                        {isReadyToBloom ? (
-                            <button
-                                onClick={onBloom}
-                                disabled={isProcessing}
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <input
+                                type="text"
+                                placeholder="Whisper kind words..."
+                                value={essence}
+                                onChange={(e) => setEssence(e.target.value)}
                                 style={{
-                                    width: '100%',
-                                    padding: '1rem',
-                                    backgroundColor: theme.colors.secondary.main,
+                                    flex: 1,
+                                    padding: '0.75rem',
+                                    borderRadius: '8px',
+                                    border: `1px solid ${theme.colors.border}`,
+                                    backgroundColor: theme.colors.background,
+                                    color: theme.colors.text.primary
+                                }}
+                            />
+                            <button
+                                onClick={() => onNurture(essence)}
+                                disabled={!essence || isProcessing}
+                                style={{
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: theme.colors.primary.main,
                                     color: 'white',
                                     border: 'none',
-                                    borderRadius: '6px',
+                                    borderRadius: '8px',
                                     fontWeight: 'bold',
-                                    cursor: isProcessing ? 'wait' : 'pointer',
-                                    opacity: isProcessing ? 0.7 : 1
+                                    cursor: (!essence || isProcessing) ? 'not-allowed' : 'pointer',
+                                    opacity: (!essence || isProcessing) ? 0.6 : 1
                                 }}
                             >
-                                {isProcessing ? 'Blooming...' : 'Bloom Bud'}
+                                {isProcessing ? '...' : 'Nurture'}
                             </button>
-                        ) : (
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <input
-                                    type="text"
-                                    placeholder="Whisper kind words..."
-                                    value={essence}
-                                    onChange={(e) => setEssence(e.target.value)}
-                                    style={{
-                                        flex: 1,
-                                        padding: '0.75rem',
-                                        borderRadius: '8px',
-                                        border: `1px solid ${theme.colors.border}`,
-                                        backgroundColor: theme.colors.background,
-                                        color: theme.colors.text.primary
-                                    }}
-                                />
-                                <button
-                                    onClick={() => onNurture(essence)}
-                                    disabled={!essence || isProcessing}
-                                    style={{
-                                        padding: '0.75rem 1.5rem',
-                                        backgroundColor: theme.colors.primary.main,
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        fontWeight: 'bold',
-                                        cursor: (!essence || isProcessing) ? 'not-allowed' : 'pointer',
-                                        opacity: (!essence || isProcessing) ? 0.6 : 1
-                                    }}
-                                >
-                                    {isProcessing ? '...' : 'Nurture'}
-                                </button>
-                            </div>
-                        )}
+                        </div>
+                    </div>
+                )}
+
+                {showDistribute && (
+                    <div style={{ paddingBottom: '1.5rem' }}>
+                        <button
+                            onClick={onDistributeReward}
+                            disabled={isProcessing}
+                            style={{
+                                width: '100%',
+                                padding: '1rem',
+                                backgroundColor: '#FFD700', // Gold color for rewards
+                                color: '#000',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontWeight: 'bold',
+                                cursor: isProcessing ? 'wait' : 'pointer',
+                                opacity: isProcessing ? 0.7 : 1
+                            }}
+                        >
+                            {isProcessing ? 'Processing...' : 'Claim / Distribute Rewards'}
+                        </button>
+                        <p style={{ fontSize: '0.75rem', color: theme.colors.text.secondary, marginTop: '0.5rem', textAlign: 'center' }}>
+                            This bud is part of a winning branch! Distribute rewards to all contributors.
+                        </p>
+                    </div>
+                )}
+
+                {bud.isPayoutComplete && (
+                    <div style={{ paddingBottom: '1.5rem', textAlign: 'center' }}>
+                        <span style={{ color: theme.colors.secondary.main, fontWeight: 'bold' }}>✅ Rewards Distributed</span>
                     </div>
                 )}
 

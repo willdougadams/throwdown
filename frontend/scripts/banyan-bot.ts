@@ -11,6 +11,11 @@ const ID_FILE = path.join(__dirname, '../../scripts/program-ids.json');
 interface GameManagerAccount {
     currentEpoch: bigint;
     prizePool: bigint;
+    authority: PublicKey;
+    lastFruitBud: PublicKey;
+    lastFruitPrize: bigint;
+    lastFruitDepth: number;
+    lastFruitEpoch: bigint;
 }
 
 interface TreeAccount {
@@ -27,6 +32,8 @@ interface BudAccount {
     vitalityRequired: bigint;
     isBloomed: boolean;
     isFruit: boolean;
+    isPayoutComplete: boolean;
+    contributionCount: number;
     contributions: [PublicKey, bigint][];
 }
 
@@ -121,7 +128,13 @@ async function main() {
         return {
             currentEpoch: view.getBigUint64(0, true),
             prizePool: view.getBigUint64(8, true),
+            authority: new PublicKey(info.data.subarray(16, 16 + 32)),
+            lastFruitBud: new PublicKey(info.data.subarray(48, 48 + 32)),
+            lastFruitPrize: view.getBigUint64(80, true),
+            lastFruitEpoch: view.getBigUint64(88, true),
+            lastFruitDepth: view.getUint8(96),
         };
+        // Note: Verify offset based on Rust struct
     }
 
     async function fetchTree(epoch: bigint): Promise<{ account: TreeAccount, address: PublicKey } | null> {
@@ -129,12 +142,11 @@ async function main() {
         const info = await connection.getAccountInfo(pda);
         if (!info) return null;
 
-        // Layout: fruit_frequency(8), authority(32), base_vit(8)
-        // Previous: root(32), max_depth(1), authority(32), base_vit(8)
+        const view = new DataView(info.data.buffer, info.data.byteOffset, info.data.byteLength);
         let offset = 0;
-        const fruitFrequency = info.data.readBigUInt64LE(offset); offset += 8;
+        const fruitFrequency = view.getBigUint64(offset, true); offset += 8;
         const authority = new PublicKey(info.data.subarray(offset, offset + 32)); offset += 32;
-        const vitalityRequiredBase = info.data.readBigUInt64LE(offset); offset += 8;
+        const vitalityRequiredBase = view.getBigUint64(offset, true); offset += 8;
 
         return {
             address: pda,
@@ -146,24 +158,29 @@ async function main() {
         const info = await connection.getAccountInfo(address);
         if (!info) return null;
 
+        const view = new DataView(info.data.buffer, info.data.byteOffset, info.data.byteLength);
         let offset = 0;
-        const parent = new PublicKey(info.data.subarray(offset, 32)); offset += 32;
+        const parent = new PublicKey(info.data.subarray(offset, offset + 32)); offset += 32;
+        const vitalityCurrent = view.getBigUint64(offset, true); offset += 8;
+        const vitalityRequired = view.getBigUint64(offset, true); offset += 8;
         const depth = info.data[offset]; offset += 1;
-        const vitalityCurrent = info.data.readBigUInt64LE(offset); offset += 8;
-        const vitalityRequired = info.data.readBigUInt64LE(offset); offset += 8;
         const isBloomed = info.data[offset] !== 0; offset += 1;
         const isFruit = info.data[offset] !== 0; offset += 1;
+        const contributionCount = info.data[offset]; offset += 1;
+        const isPayoutComplete = info.data[offset] !== 0; offset += 1;
 
-        // Contributions: Vec<([u8; 32], u64)>
-        const contributionsLen = info.data.readUInt32LE(offset); offset += 4;
+        offset += 3; // _padding [u8; 3]
+
         const contributions: [PublicKey, bigint][] = [];
-        for (let i = 0; i < contributionsLen; i++) {
+        for (let i = 0; i < 10; i++) {
             const pk = new PublicKey(info.data.subarray(offset, offset + 32)); offset += 32;
-            const amount = info.data.readBigUInt64LE(offset); offset += 8;
-            contributions.push([pk, amount]);
+            const amount = view.getBigUint64(offset, true); offset += 8;
+            if (i < contributionCount) {
+                contributions.push([pk, amount]);
+            }
         }
 
-        return { address, parent, depth, vitalityCurrent, vitalityRequired, isBloomed, isFruit, contributions };
+        return { address, parent, depth, vitalityCurrent, vitalityRequired, isBloomed, isFruit, isPayoutComplete, contributionCount, contributions };
     }
 
     async function actionInitializeTree(epoch: bigint) {
@@ -308,6 +325,46 @@ async function main() {
         }
     }
 
+    async function actionDistributeNodeReward(bud: BudAccount) {
+        console.log(`💰 Distributing rewards for node ${bud.address.toString().slice(0, 8)}...`);
+
+        const [managerPda] = findGameManagerPda();
+        const [managerAuthority] = await connection.getAccountInfo(managerPda).then(i => {
+            if (!i) throw new Error("Manager not found");
+            return [new PublicKey(i.data.subarray(16, 48))]; // authority
+        });
+
+        // Collect all contributor accounts in order
+        const keys = [
+            { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+            { pubkey: managerPda, isSigner: false, isWritable: true },
+            { pubkey: bud.address, isSigner: false, isWritable: true },
+        ];
+
+        // Add contributors
+        for (const [pk, _] of bud.contributions) {
+            keys.push({ pubkey: pk, isSigner: false, isWritable: true });
+        }
+
+        // Add nurturer (cranker) as the last account to receive bounty
+        keys.push({ pubkey: payer.publicKey, isSigner: false, isWritable: true });
+
+        const instructionData = Buffer.from([3]); // DistributeNodeReward
+
+        const tx = new Transaction().add({
+            keys,
+            programId: PROGRAM_ID,
+            data: instructionData
+        });
+
+        try {
+            const sig = await sendAndConfirmTransaction(connection, tx, [payer], { skipPreflight: true });
+            console.log(`✅ Distributed! Sig: ${sig}`);
+        } catch (e: any) {
+            console.error(`❌ Distribution failed: ${e.message}`);
+        }
+    }
+
     // --- Loop ---
 
     while (true) {
@@ -328,6 +385,30 @@ async function main() {
             }
 
             const [rootBud] = findBudPda(tree.address, 'root');
+
+            // --- Reward Claiming (Previous Epochs) ---
+            // If we have a lastFruitBud, check if we (the payer) are in that branch and haven't claimed
+            if (manager.lastFruitPrize > 0n && manager.lastFruitEpoch === manager.currentEpoch - BigInt(1)) {
+                console.log(`🔍 Checking for unclaimed rewards in epoch ${manager.lastFruitEpoch}...`);
+
+                // We need to find our contributions in the winning branch. 
+                // The bot would ideally have this cached, but for now we can scan 
+                // actionable/visible buds or specific ones if we know the path.
+                // Short-term: check the lastFruitBud itself and its ancestors.
+
+                let currentClaimAddr: PublicKey | null = manager.lastFruitBud;
+                while (currentClaimAddr && !currentClaimAddr.equals(PublicKey.default)) {
+                    const bud = await fetchBud(currentClaimAddr);
+                    if (!bud) break;
+
+                    if (!bud.isPayoutComplete && bud.contributionCount > 0) {
+                        await actionDistributeNodeReward(bud);
+                    }
+
+                    if (bud.parent.equals(PublicKey.default) || bud.depth === 0) break;
+                    currentClaimAddr = bud.parent;
+                }
+            }
 
             // Just find one actionable thing and do it
             const actionable = await findActionableBuds(rootBud);

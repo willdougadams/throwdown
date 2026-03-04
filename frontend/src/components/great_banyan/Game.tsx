@@ -40,13 +40,27 @@ export const GreatBanyanGame: React.FC = () => {
                 return;
             }
 
-            // Layout: current_epoch (u64), prize_pool (u64)
             const data = info.data;
             const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-            const currentEpoch = view.getBigUint64(0, true);
-            const prizePool = view.getBigUint64(8, true);
 
-            setGameManager({ currentEpoch, prizePool });
+            // GameManager Layout (Rust):
+            // current_epoch: u64 (0-8)
+            // prize_pool: u64 (8-16)
+            // authority: [u8; 32] (16-48)
+            // last_fruit_bud: [u8; 32] (48-80)
+            // last_fruit_prize: u64 (80-88)
+            // last_fruit_epoch: u64 (88-96)
+            // last_fruit_depth: u8 (96-97)
+
+            setGameManager({
+                currentEpoch: view.getBigUint64(0, true),
+                prizePool: view.getBigUint64(8, true),
+                authority: new PublicKey(data.subarray(16, 48)),
+                lastFruitBud: new PublicKey(data.subarray(48, 80)),
+                lastFruitPrize: view.getBigUint64(80, true),
+                lastFruitEpoch: view.getBigUint64(88, true),
+                lastFruitDepth: view.getUint8(96),
+            });
 
         } catch (e) {
             console.error("Failed to fetch game manager", e);
@@ -65,11 +79,6 @@ export const GreatBanyanGame: React.FC = () => {
                 console.log("Tree account not found for epoch", gameManager.currentEpoch.toString());
                 return;
             }
-
-            // Layout: 
-            // fruit_frequency: u64 (8 bytes)
-            // authority: [u8; 32] (32 bytes)
-            // vitality_required_base: u64 (8 bytes)
 
             const data = accountInfo.data;
             const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
@@ -108,42 +117,46 @@ export const GreatBanyanGame: React.FC = () => {
             if (!info) return;
 
             const data = info.data;
-            // Layout:
-            // parent: 32
-            // depth: 1
-            // vitality_current: 8
-            // vitality_required: 8
-            // is_bloomed: 1
-            // is_fruit: 1
-            // nurturers: variable (u32 len + vec)
+            const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
+            // Bud Layout (Rust):
+            // parent: 32 (0-32)
+            // vitality_current: 8 (32-40)
+            // vitality_required: 8 (40-48)
+            // depth: 1 (48-49)
+            // is_bloomed: 1 (49-50)
+            // is_fruit: 1 (50-51)
+            // contribution_count: 1 (51-52)
+            // is_payout_complete: 1 (52-53)
+            // _padding: 3 (53-56)
+            // contributions: [Contribution; 10] (56-456) -> Each Contribution is { key: 32, vitality: 8 }
 
             let offset = 0;
             const parent = new PublicKey(data.subarray(offset, offset + 32));
             offset += 32;
-            const depth = data[offset];
-            offset += 1;
 
-            const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
             const vitalityCurrent = view.getBigUint64(offset, true);
             offset += 8;
             const vitalityRequired = view.getBigUint64(offset, true);
             offset += 8;
-            const isBloomed = data[offset] !== 0;
-            offset += 1;
-            const isFruit = data[offset] !== 0;
-            offset += 1;
 
-            // Deserialize contributions: Vec<([u8; 32], u64)>
-            // Borsh Vec starts with u32 length
-            const contributionsLen = view.getUint32(offset, true);
-            offset += 4;
+            const depth = data[offset]; offset += 1;
+            const isBloomed = data[offset] !== 0; offset += 1;
+            const isFruit = data[offset] !== 0; offset += 1;
+            const contributionCount = data[offset]; offset += 1;
+            const isPayoutComplete = data[offset] !== 0; offset += 1;
+
+            offset += 3; // padding
+
             const contributions: [PublicKey, bigint][] = [];
-            for (let i = 0; i < contributionsLen; i++) {
+            for (let i = 0; i < 10; i++) {
                 const pk = new PublicKey(data.subarray(offset, offset + 32));
                 offset += 32;
                 const amount = view.getBigUint64(offset, true);
                 offset += 8;
-                contributions.push([pk, amount]);
+                if (i < contributionCount) {
+                    contributions.push([pk, amount]);
+                }
             }
 
             const budAcc: BudAccount = {
@@ -153,6 +166,8 @@ export const GreatBanyanGame: React.FC = () => {
                 vitalityRequired,
                 isBloomed,
                 isFruit,
+                isPayoutComplete,
+                contributionCount,
                 contributions
             };
 
@@ -282,7 +297,6 @@ export const GreatBanyanGame: React.FC = () => {
                     { pubkey: treePda, isSigner: false, isWritable: false },
                     { pubkey: leftPda, isSigner: false, isWritable: true },
                     { pubkey: rightPda, isSigner: false, isWritable: true },
-                    { pubkey: treeState!.authority, isSigner: false, isWritable: true },
                 ],
                 programId: PROGRAM_ID,
                 data: Buffer.from(data),
@@ -321,64 +335,47 @@ export const GreatBanyanGame: React.FC = () => {
         }
     };
 
-    const handleBloom = async () => {
-        if (!selectedBudAddress || !publicKey) return;
+    const handleDistributeReward = async () => {
+        if (!selectedBudAddress || !publicKey || !gameManager) return;
         setIsProcessing(true);
         try {
-            // BloomBud: Variant 3
-            // Data: [3] (No proof needed anymore)
-            const data = new Uint8Array(1);
-            const view = new DataView(data.buffer);
-            view.setUint8(0, 3); // Variant 3
-
             const [managerPda] = findGameManagerPda();
-            // We need treePda. We can get it from treeState logic or re-derive
-            if (!gameManager) throw new Error("Game Manager not loaded");
-            const [treePda] = findTreePda(gameManager.currentEpoch);
+            const data = Buffer.from([3]); // DistributeNodeReward
 
-            // Derive children PDAs
-            const [leftPda] = findChildBudPda(selectedBudAddress, 'left');
-            const [rightPda] = findChildBudPda(selectedBudAddress, 'right');
+            const bud = buds.get(selectedBudAddress.toString());
+            if (!bud) throw new Error("Bud data not found");
 
-            console.log("Bloom Debug:");
-            console.log("Tree PDA:", treePda.toString());
-            console.log("Selected Bud:", selectedBudAddress.toString());
-            console.log("Left Child PDA:", leftPda.toString());
-            console.log("Right Child PDA:", rightPda.toString());
-            console.log("Manager PDA:", managerPda.toString());
-            console.log("Program ID:", PROGRAM_ID.toString());
+            // Collect all contributor accounts in order
+            const keys = [
+                { pubkey: publicKey, isSigner: true, isWritable: true },
+                { pubkey: managerPda, isSigner: false, isWritable: true },
+                { pubkey: selectedBudAddress, isSigner: false, isWritable: true },
+            ];
+
+            // Add contributors
+            for (const [pk, _] of bud.contributions) {
+                keys.push({ pubkey: pk, isSigner: false, isWritable: true });
+            }
+
+            // ADD NURTURER (cranker) as the last account
+            keys.push({ pubkey: publicKey, isSigner: false, isWritable: true });
 
             const tx = new Transaction().add({
-                keys: [
-                    { pubkey: publicKey, isSigner: true, isWritable: true },
-                    { pubkey: managerPda, isSigner: false, isWritable: true },
-                    { pubkey: treePda, isSigner: false, isWritable: true }, // Read-only in Rust? No, mutable (lines 252, 262 borrow data?) actually tree_state is read to verify proof. But children creation doesn't mod tree. Wait, lib.rs line 251: next_account_info. 
-                    // Rust: let tree_state_info = ...; let tree_state = TreeState::try_from_slice...
-                    // It is NOT written to. So isWritable: false is fine? 
-                    // Pinocchio `create_account` uses `invoke_signed`.
-                    // Actually, let's look at `lib.rs`: "tree_state_info" is passed. 
-                    // It is NOT mutable in the instruction processing for BloomBud (only read for root).
-                    // So writable: false is correct.
-                    { pubkey: selectedBudAddress, isSigner: false, isWritable: true },
-                    { pubkey: leftPda, isSigner: false, isWritable: true },
-                    { pubkey: rightPda, isSigner: false, isWritable: true },
-                    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-                ],
+                keys,
                 programId: PROGRAM_ID,
-                data: Buffer.from(data),
+                data
             });
 
             const sig = await sendTransaction(tx, connection);
             await connection.confirmTransaction(sig, 'confirmed');
 
-            alert("Bloomed! Children created.");
-            fetchBud(selectedBudAddress); // Refresh parent
-            fetchBud(leftPda); // Fetch new children
-            fetchBud(rightPda);
+            alert("Rewards distributed successfully!");
+            await fetchBud(selectedBudAddress);
+            await fetchGameManager();
 
         } catch (e) {
-            console.error("Bloom failed", e);
-            alert("Bloom failed: " + (e as any).message);
+            console.error("Distribution failed", e);
+            alert("Distribution failed: " + (e as any).message);
         } finally {
             setIsProcessing(false);
         }
@@ -492,8 +489,9 @@ export const GreatBanyanGame: React.FC = () => {
                 onClose={() => setSelectedBudAddress(null)}
                 bud={selectedBudAddress ? buds.get(selectedBudAddress.toString()) || null : null}
                 budAddress={selectedBudAddress}
+                gameManager={gameManager}
                 onNurture={handleNurture}
-                onBloom={handleBloom}
+                onDistributeReward={handleDistributeReward}
                 isProcessing={isProcessing}
             />
         </div>

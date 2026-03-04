@@ -58,6 +58,8 @@ export interface BudAccount {
     vitalityRequired: bigint;
     isBloomed: boolean;
     isFruit: boolean;
+    isPayoutComplete: boolean;
+    contributionCount: number;
     contributions: [PublicKey, bigint][];
 }
 
@@ -70,4 +72,9 @@ export interface TreeAccount {
 export interface GameManagerAccount {
     currentEpoch: bigint;
     prizePool: bigint;
+    authority: PublicKey;
+    lastFruitBud: PublicKey;
+    lastFruitPrize: bigint;
+    lastFruitEpoch: bigint;
+    lastFruitDepth: number;
 }
