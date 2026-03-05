@@ -4,8 +4,8 @@ export const GAME_RULES = {
     FRUIT_FREQUENCY: 100n,
 
     // The base amount of vitality required to bloom a bud.
-    VITALITY_REQUIRED_BASE: 256n,
+    VITALITY_REQUIRED_BASE: 10n,
 
     // Cost in lamports to nurture a bud (sent to prize pool)
-    NURTURE_COST_LAMPORTS: 600_000,
+    NURTURE_COST_LAMPORTS: 600_000_000,
 };

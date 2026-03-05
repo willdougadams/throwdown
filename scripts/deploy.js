@@ -5,10 +5,14 @@ const path = require('path');
 async function deploy() {
     const program = process.argv[2];
     const network = process.argv[3] || 'localnet';
-    const forceNew = process.argv[4] === 'true';
+    const forceNew = process.argv.includes('--force-new');
+
+    // Check for custom URL
+    const urlIdx = process.argv.indexOf('--url');
+    const customUrl = urlIdx !== -1 ? process.argv[urlIdx + 1] : null;
 
     if (!program) {
-        console.error('Usage: node deploy.js <program> [network] [forceNew]');
+        console.error('Usage: node deploy.js <program> [network] [--force-new] [--url <rpc-url>]');
         process.exit(1);
     }
 
@@ -16,12 +20,16 @@ async function deploy() {
         console.log(`🚀 Deploying ${program} to ${network}...`);
 
         // 1. Set cluster
-        let rpcUrl = 'http://127.0.0.1:8899';
-        if (network === 'devnet') {
-            rpcUrl = 'https://api.devnet.solana.com';
-        } else if (network === 'mainnet') {
-            rpcUrl = 'https://api.mainnet-beta.solana.com';
+        let rpcUrl = customUrl;
+        if (!rpcUrl) {
+            rpcUrl = 'http://127.0.0.1:8899';
+            if (network === 'devnet') {
+                rpcUrl = 'https://api.devnet.solana.com';
+            } else if (network === 'mainnet') {
+                rpcUrl = 'https://api.mainnet-beta.solana.com';
+            }
         }
+        console.log(`🌐 Cluster URL: ${rpcUrl}`);
         await exec('solana', ['config', 'set', '--url', rpcUrl]);
 
         // 2. Build program

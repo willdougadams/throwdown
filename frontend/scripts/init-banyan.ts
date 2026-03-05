@@ -58,7 +58,7 @@ async function main() {
     // 1. Initialize Game Manager
     // Seeds: "manager"
     const [managerPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("manager")],
+        [Buffer.from("manager_v1")],
         PROGRAM_ID
     );
     console.log(`Manager PDA: ${managerPda.toString()} `);
@@ -77,6 +77,7 @@ async function main() {
             keys: [
                 { pubkey: payer.publicKey, isSigner: true, isWritable: true },
                 { pubkey: managerPda, isSigner: false, isWritable: true },
+                { pubkey: payer.publicKey, isSigner: false, isWritable: false }, // authority
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
             ],
             programId: PROGRAM_ID,

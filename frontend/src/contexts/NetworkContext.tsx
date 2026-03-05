@@ -1,23 +1,24 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export type Network = 'localnet' | 'devnet' | 'mainnet-beta';
+export type Network = 'localnet' | 'devnet' | 'mainnet-beta' | 'custom';
 
 interface NetworkContextType {
   network: Network;
+  customRpcUrl: string;
   setNetwork: (network: Network) => void;
+  setCustomRpcUrl: (url: string) => void;
+  applyCustomRpc: () => void;
 }
 
 const NetworkContext = createContext<NetworkContextType | undefined>(undefined);
 
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const [network, setNetworkState] = useState<Network>(() => {
-    // Load from localStorage or default to localnet
     const stored = localStorage.getItem('solana-network');
-    if (stored === 'localnet' || stored === 'devnet' || stored === 'mainnet-beta') {
+    if (stored === 'localnet' || stored === 'devnet' || stored === 'mainnet-beta' || stored === 'custom') {
       return stored as Network;
     }
 
-    // Auto-detect based on hostname
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -28,17 +29,34 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     return 'devnet';
   });
 
+  const [customRpcUrl, setCustomRpcUrl] = useState<string>(() => {
+    return localStorage.getItem('solana-custom-rpc-url') || '';
+  });
+
   const setNetwork = (newNetwork: Network) => {
-    console.log(`[NetworkContext] Switching network from ${network} to ${newNetwork}`);
+    console.log(`[NetworkContext] Switching network to ${newNetwork}`);
     setNetworkState(newNetwork);
     localStorage.setItem('solana-network', newNetwork);
-    // Reload the page to ensure clean state with new network
-    console.log('[NetworkContext] Reloading page to apply changes...');
+    // Auto-reload for standard networks to ensure clean state
+    if (newNetwork !== 'custom') {
+      window.location.reload();
+    }
+  };
+
+  const applyCustomRpc = () => {
+    console.log(`[NetworkContext] Applying custom RPC: ${customRpcUrl}`);
+    localStorage.setItem('solana-custom-rpc-url', customRpcUrl);
     window.location.reload();
   };
 
   return (
-    <NetworkContext.Provider value={{ network, setNetwork }}>
+    <NetworkContext.Provider value={{
+      network,
+      customRpcUrl,
+      setNetwork,
+      setCustomRpcUrl,
+      applyCustomRpc
+    }}>
       {children}
     </NetworkContext.Provider>
   );

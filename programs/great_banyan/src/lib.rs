@@ -411,29 +411,33 @@ pub fn process_instruction(
                         return Err(ProgramError::InvalidSeeds);
                     }
     
-                    
-                    let left_child = Bud {
-                        parent: *bud_info.key(),
-                        vitality_current: 1,
-                        vitality_required: 10,
-                        is_payout_complete: 0,
-                        depth: child_depth,
-                        is_bloomed: 0,
-                        is_fruit: 0,
-                        contribution_count: 0,
-                        _padding: [0u8; 3],
-                        contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
-                    };
-                    
-                    create_account_with_space(
-                        nurturer, // Payer is nurturer
-                        left_child_info,
-                        system_program,
-                        program_id,
-                        bytemuck::bytes_of(&left_child),
-                        BUD_SIZE,
-                        &[b"bud", bud_info.key(), b"left", &[left_bump]],
-                    )?;
+                    if left_child_info.data_len() == 0 {
+                        msg!("Creating left child...");
+                        let left_child = Bud {
+                            parent: *bud_info.key(),
+                            vitality_current: 1,
+                            vitality_required: 10,
+                            is_payout_complete: 0,
+                            depth: child_depth,
+                            is_bloomed: 0,
+                            is_fruit: 0,
+                            contribution_count: 0,
+                            _padding: [0u8; 3],
+                            contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
+                        };
+                        
+                        create_account_with_space(
+                            nurturer, // Payer is nurturer
+                            left_child_info,
+                            system_program,
+                            program_id,
+                            bytemuck::bytes_of(&left_child),
+                            BUD_SIZE,
+                            &[b"bud", bud_info.key(), b"left", &[left_bump]],
+                        )?;
+                    } else {
+                        msg!("Left child already exists, skipping creation");
+                    }
     
                     // Right Child
                     let right_seeds: &[&[u8]] = &[b"bud", bud_info.key(), b"right"];
@@ -442,29 +446,33 @@ pub fn process_instruction(
                         return Err(ProgramError::InvalidSeeds);
                     }
     
-                    
-                    let right_child = Bud {
-                        parent: *bud_info.key(),
-                        vitality_current: 1,
-                        vitality_required: 10,
-                        is_payout_complete: 0,
-                        depth: child_depth,
-                        is_bloomed: 0,
-                        is_fruit: 0,
-                        contribution_count: 0,
-                        _padding: [0u8; 3],
-                        contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
-                    };
-                    
-                    create_account_with_space(
-                        nurturer,
-                        right_child_info,
-                        system_program,
-                        program_id,
-                        bytemuck::bytes_of(&right_child),
-                        BUD_SIZE,
-                        &[b"bud", bud_info.key(), b"right", &[right_bump]],
-                    )?;
+                    if right_child_info.data_len() == 0 {
+                        msg!("Creating right child...");
+                        let right_child = Bud {
+                            parent: *bud_info.key(),
+                            vitality_current: 1,
+                            vitality_required: 10,
+                            is_payout_complete: 0,
+                            depth: child_depth,
+                            is_bloomed: 0,
+                            is_fruit: 0,
+                            contribution_count: 0,
+                            _padding: [0u8; 3],
+                            contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
+                        };
+                        
+                        create_account_with_space(
+                            nurturer,
+                            right_child_info,
+                            system_program,
+                            program_id,
+                            bytemuck::bytes_of(&right_child),
+                            BUD_SIZE,
+                            &[b"bud", bud_info.key(), b"right", &[right_bump]],
+                        )?;
+                    } else {
+                        msg!("Right child already exists, skipping creation");
+                    }
                 }
             }
             

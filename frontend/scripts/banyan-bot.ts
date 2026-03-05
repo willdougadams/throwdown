@@ -213,7 +213,12 @@ async function main() {
             const sig = await sendAndConfirmTransaction(connection, tx, [payer]);
             console.log(`✅ Tree Initialized! Sig: ${sig}`);
         } catch (e: any) {
-            console.error(`❌ Initialization failed: ${e.message}`);
+            console.error(`❌ Initialization failed:`);
+            if (e.logs) {
+                console.error("Program Logs:", e.logs.join("\n"));
+            } else {
+                console.error(e);
+            }
         }
     }
 
@@ -318,10 +323,31 @@ async function main() {
         });
 
         try {
-            const sig = await sendAndConfirmTransaction(connection, tx, [payer], { skipPreflight: true });
+            const sig = await sendAndConfirmTransaction(connection, tx, [payer], { skipPreflight: true, commitment: 'confirmed' });
             console.log(`✅ Nurtured! Sig: ${sig}`);
         } catch (e: any) {
-            console.error(`❌ Nurture failed: ${e.message}`);
+            console.error(`❌ Nurture failed for bud ${bud.address.toString().slice(0, 8)}:`);
+            let logs = e.logs;
+            const sig = e.signature;
+
+            if (!logs && sig) {
+                console.log(`🔍 Fetching logs for ${sig}...`);
+                try {
+                    const txInfo = await connection.getTransaction(sig, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+                    logs = txInfo?.meta?.logMessages;
+                } catch (fetchError) {
+                    console.error("Failed to fetch transaction logs:", fetchError);
+                }
+            }
+
+            if (logs) {
+                console.error("Program Logs:\n" + logs.join("\n"));
+            } else if (e.message) {
+                console.error(e.message);
+                if (sig) console.error(`Signature: ${sig}`);
+            } else {
+                console.error(e);
+            }
         }
     }
 
@@ -360,7 +386,15 @@ async function main() {
             const sig = await sendAndConfirmTransaction(connection, tx, [payer], { skipPreflight: true });
             console.log(`✅ Distributed! Sig: ${sig}`);
         } catch (e: any) {
-            console.error(`❌ Distribution failed: ${e.message}`);
+            console.error(`❌ Distribution failed for node ${bud.address.toString().slice(0, 8)}:`);
+            if (e.logs) {
+                console.error("Program Logs:", e.logs.join("\n"));
+            } else if (e.message) {
+                console.error(e.message);
+                if (e.signature) console.error(`Signature: ${e.signature}`);
+            } else {
+                console.error(e);
+            }
         }
     }
 

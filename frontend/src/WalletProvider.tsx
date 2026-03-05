@@ -11,7 +11,7 @@ import { useNetwork } from './contexts/NetworkContext';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
-    const { network } = useNetwork();
+    const { network, customRpcUrl } = useNetwork();
 
     const endpoint = useMemo(() => {
         // Return appropriate RPC endpoint based on selected network
@@ -22,10 +22,12 @@ const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
             ep = clusterApiUrl(WalletAdapterNetwork.Devnet);
         } else if (network === 'mainnet-beta') {
             ep = clusterApiUrl(WalletAdapterNetwork.Mainnet);
+        } else if (network === 'custom') {
+            ep = customRpcUrl || clusterApiUrl(WalletAdapterNetwork.Devnet);
         }
         console.log(`[WalletProvider] Network: ${network}, Endpoint: ${ep}`);
         return ep;
-    }, [network]);
+    }, [network, customRpcUrl]);
 
     const wallets = useMemo(
         () => [

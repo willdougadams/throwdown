@@ -381,8 +381,47 @@ export const GreatBanyanGame: React.FC = () => {
         }
     };
 
+    const handleInitializeManager = async () => {
+        if (!publicKey) return;
+        setIsProcessing(true);
+        try {
+            console.log("Initializing Global Game Manager...");
+            const [managerPda] = findGameManagerPda();
+            const data = Buffer.from([0]); // InitializeGame
+
+            const tx = new Transaction().add({
+                keys: [
+                    { pubkey: publicKey, isSigner: true, isWritable: true },
+                    { pubkey: managerPda, isSigner: false, isWritable: true },
+                    { pubkey: publicKey, isSigner: false, isWritable: false }, // authority
+                    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                ],
+                programId: PROGRAM_ID,
+                data
+            });
+
+            const sig = await sendTransaction(tx, connection);
+            await connection.confirmTransaction(sig, 'confirmed');
+
+            alert("Game Manager Initialized!");
+            fetchGameManager();
+        } catch (e) {
+            console.error("Manager initialization failed", e);
+            alert("Manager initialization failed: " + (e as any).message);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const handleInitializeTree = async () => {
-        if (!gameManager || !publicKey) return;
+        if (!publicKey) return;
+
+        // If manager is missing, initialize that first
+        if (!gameManager) {
+            await handleInitializeManager();
+            return;
+        }
+
         setIsProcessing(true);
         try {
             // InitializeTree: Variant 1
@@ -471,7 +510,9 @@ export const GreatBanyanGame: React.FC = () => {
                             fontWeight: 'bold'
                         }}
                     >
-                        {isProcessing ? 'Initializing...' : 'Initialize Tree for Epoch ' + (gameManager?.currentEpoch.toString() || '0')}
+                        {isProcessing ? 'Processing...' :
+                            !gameManager ? 'Initialize Global Game Manager' :
+                                'Initialize Tree for Epoch ' + gameManager.currentEpoch.toString()}
                     </button>
                 )}
             </div>

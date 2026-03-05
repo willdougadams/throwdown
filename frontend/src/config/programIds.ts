@@ -1,7 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import programIds from '../../../scripts/program-ids.json';
 
-export type Network = 'localnet' | 'devnet' | 'mainnet-beta';
+export type Network = 'localnet' | 'devnet' | 'mainnet-beta' | 'custom';
 
 // Auto-detect network from localStorage or URL
 export function getCurrentNetwork(): Network {
@@ -9,7 +9,7 @@ export function getCurrentNetwork(): Network {
 
   // First, check localStorage for user's network selection
   const stored = localStorage.getItem('solana-network');
-  if (stored === 'localnet' || stored === 'devnet' || stored === 'mainnet-beta') {
+  if (stored === 'localnet' || stored === 'devnet' || stored === 'mainnet-beta' || stored === 'custom') {
     return stored as Network;
   }
 
@@ -33,7 +33,11 @@ export function getProgramId(program: 'banyan' | 'rps' | 'chess' = 'rps', networ
   const targetNetwork = network || getCurrentNetwork();
 
   // Map mainnet-beta to mainnet for the JSON lookup
-  const jsonKey = targetNetwork === 'mainnet-beta' ? 'mainnet' : targetNetwork;
+  // Default 'custom' to 'devnet' for program ID lookups
+  let jsonKey: string = targetNetwork;
+  if (targetNetwork === 'mainnet-beta') jsonKey = 'mainnet';
+  if (targetNetwork === 'custom') jsonKey = 'devnet';
+
   const netData = (programIds as any)[jsonKey];
 
   if (!netData) {
@@ -45,6 +49,12 @@ export function getProgramId(program: 'banyan' | 'rps' | 'chess' = 'rps', networ
   const programId = typeof netData === 'string' ? netData : (netData as any)[program];
 
   if (!programId || programId === "11111111111111111111111111111111") {
+    // If we're on mainnet and ID is missing, fallback to devnet as a last resort
+    if (targetNetwork === 'mainnet-beta') {
+      console.warn(`[getProgramId] Program ${program} not found on mainnet-beta, falling back to devnet`);
+      return getProgramId(program, 'devnet');
+    }
+
     console.warn(`[getProgramId] No program ID configured for ${program} on ${targetNetwork}`);
     if (targetNetwork === 'localnet') {
       throw new Error(`Program ${program} not found on localnet. Did you run 'make deploy-${program}'?`);
