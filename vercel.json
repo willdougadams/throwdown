@@ -10,7 +10,7 @@
   },
   "functions": {
     "api/src/index.ts": {
-      "runtime": "vercel-node@latest"
+      "maxDuration": 10
     }
   },
   "rewrites": [
