@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { useWallet } from '@solana/wallet-adapter-react';
+
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ThemeSelector from './ThemeSelector';
 import NetworkSelector from './NetworkSelector';
 import AirdropButton from './AirdropButton';
-import { Home, Wallet, Swords, Grip, Trees, Info, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
+import { Home, Wallet, Swords, Grip, Trees, Info, ChevronDown, ChevronUp, Settings2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { theme } from '../theme';
 import { BanyanLogo } from './index';
+import { useNetwork } from '../contexts/NetworkContext';
+
 
 interface SidebarProps {
     isOpen: boolean;
@@ -19,10 +22,11 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
     const { t } = useTranslation();
     const { publicKey } = useWallet();
-    const { connection } = useConnection();
+    const { connection, trustfulMode, setTrustfulMode } = useNetwork();
     const navigate = useNavigate();
     const [balance, setBalance] = useState<number | null>(null);
     const [isBottomPanelOpen, setIsBottomPanelOpen] = useState(false);
+
 
     const fetchBalance = async () => {
         if (!connection || !publicKey) {
@@ -226,7 +230,49 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
                                 </div>
                             )}
                             <NetworkSelector />
+
+                            {/* Trustful Mode Toggle */}
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '0.5rem',
+                                borderRadius: '6px',
+                                backgroundColor: theme.colors.surface,
+                                border: `1px solid ${theme.colors.border}`
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    {trustfulMode ? <ShieldCheck size={16} color={theme.colors.secondary.main} /> : <ShieldAlert size={16} color={theme.colors.text.secondary} />}
+                                    <span style={{ fontSize: '0.85rem', color: theme.colors.text.primary }}>Trustful Mode</span>
+                                </div>
+                                <button
+                                    onClick={() => setTrustfulMode(!trustfulMode)}
+                                    style={{
+                                        width: '40px',
+                                        height: '20px',
+                                        borderRadius: '10px',
+                                        backgroundColor: trustfulMode ? theme.colors.secondary.main : theme.colors.border,
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        border: 'none',
+                                        transition: 'background-color 0.2s'
+                                    }}
+                                >
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '2px',
+                                        left: trustfulMode ? '22px' : '2px',
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '50%',
+                                        backgroundColor: 'white',
+                                        transition: 'left 0.2s'
+                                    }} />
+                                </button>
+                            </div>
+
                             <AirdropButton />
+
                         </div>
                     )}
                 </div>

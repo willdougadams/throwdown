@@ -1,35 +1,40 @@
 import React from 'react';
 import { PublicKey } from '@solana/web3.js';
 import { theme } from '../../theme';
-import { BudAccount, GameManagerAccount } from './utils';
+import { BudData, GameManagerData } from '../../services/gameClient';
+
 
 interface BudModalProps {
     isOpen: boolean;
     onClose: () => void;
-    bud: BudAccount | null;
+    bud: BudData | null;
     budAddress: PublicKey | null;
-    gameManager: GameManagerAccount | null;
+    gameManager: GameManagerData | null;
     onNurture: (essence: string) => void;
     onDistributeReward: () => void;
     isProcessing: boolean;
 }
 
+
 export const BudModal: React.FC<BudModalProps> = ({
     isOpen,
     onClose,
     bud,
-    budAddress,
     gameManager,
     onNurture,
     onDistributeReward,
     isProcessing
 }) => {
+
     if (!isOpen || !bud) return null;
 
     const [essence, setEssence] = React.useState('');
 
-    const progress = Number(bud.vitalityRequired > 0n ? (bud.vitalityCurrent * 100n) / bud.vitalityRequired : 0n);
-    const isReadyToBloom = bud.vitalityCurrent >= bud.vitalityRequired;
+    const vitalityCurrent = BigInt(bud.vitalityCurrent);
+    const vitalityRequired = BigInt(bud.vitalityRequired);
+    const progress = Number(vitalityRequired > 0n ? (vitalityCurrent * 100n) / vitalityRequired : 0n);
+    const isReadyToBloom = vitalityCurrent >= vitalityRequired;
+
 
     // Logic for showing Reward Distribution button:
     // 1. Bud is bloomed and is fruit (or part of winning branch in future)
@@ -37,8 +42,9 @@ export const BudModal: React.FC<BudModalProps> = ({
     // 3. We are in a subsequent epoch (or the program allows current epoch distribution)
     // Actually, per program logic: manager.last_fruit_epoch == manager.current_epoch - 1
     const showDistribute = bud.isBloomed && !bud.isPayoutComplete &&
-        gameManager && gameManager.lastFruitEpoch === gameManager.currentEpoch - 1n &&
-        (bud.isFruit || true); // For now, we allow trigger on any bloomed node if payout not complete
+        gameManager && BigInt(gameManager.lastFruitEpoch) === BigInt(gameManager.currentEpoch) - 1n &&
+        (bud.isFruit || true);
+
 
     return (
         <div
@@ -114,8 +120,9 @@ export const BudModal: React.FC<BudModalProps> = ({
                     <div>
                         <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.25rem' }}>Growth</div>
                         <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
-                            {bud.vitalityCurrent.toString()} / {bud.vitalityRequired.toString()}
+                            {bud.vitalityCurrent} / {bud.vitalityRequired}
                         </div>
+
                     </div>
                 </div>
 
@@ -192,11 +199,12 @@ export const BudModal: React.FC<BudModalProps> = ({
                         <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>nurtured by</div>
                         <div style={{ fontSize: '0.875rem', backgroundColor: theme.colors.background, padding: '0.5rem', borderRadius: '8px' }}>
                             <ul style={{ margin: 0, paddingLeft: '1.2rem', listStyle: 'circle' }}>
-                                {bud.contributions.map(([pk, amount], idx) => (
+                                {bud.contributions.map(({ pubkey, amount }, idx) => (
                                     <li key={idx}>
-                                        {pk.toString().slice(0, 4)}...{pk.toString().slice(-4)}: <strong>{amount.toString()}</strong>
+                                        {pubkey.toString().slice(0, 4)}...{pubkey.toString().slice(-4)}: <strong>{amount.toString()}</strong>
                                     </li>
                                 ))}
+
                             </ul>
                         </div>
                     </div>

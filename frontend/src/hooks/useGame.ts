@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useConnection } from '@solana/wallet-adapter-react';
-import { GameService } from '../services/gameService';
+import { useNetwork } from '../contexts/NetworkContext';
+
 
 export interface GameData {
   id: string;
@@ -35,25 +35,27 @@ interface UseGameResult {
  * @param autoRefresh - Optional: Auto-refresh interval in milliseconds
  */
 export function useGame(gameId: string | undefined, autoRefresh?: number): UseGameResult {
-  const { connection } = useConnection();
+  const { activeClient } = useNetwork();
+
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [rawGameData, setRawGameData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchGameData = useCallback(async () => {
-    if (!connection || !gameId) {
-      console.log('No connection or gameId available');
+    if (!gameId) {
+      console.log('No gameId available');
       return;
     }
+
 
     console.log('Fetching game data for:', gameId);
     setLoading(true);
     setError(null);
 
     try {
-      const gameService = new GameService(connection);
-      const gameDetails = await gameService.fetchGameDetails(gameId);
+      const gameDetails = await activeClient.getGameDetails('rps', gameId);
+
 
       if (!gameDetails) {
         setError('Game not found');
@@ -116,7 +118,8 @@ export function useGame(gameId: string | undefined, autoRefresh?: number): UseGa
     } finally {
       setLoading(false);
     }
-  }, [connection, gameId]);
+  }, [activeClient, gameId]);
+
 
   // Initial fetch
   useEffect(() => {

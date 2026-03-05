@@ -1,15 +1,19 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+
 import { PublicKey } from '@solana/web3.js';
-import { BudAccount, findChildBudPda } from './utils';
+import { BudData } from '../../services/gameClient';
+import { findChildBudPda } from './utils';
+
 import { BeachBackground } from './BeachBackground';
 import { useGameCamera } from './useGameCamera';
 import './TreeVisualizer.css';
 
 interface TreeVisualizerProps {
     rootBudAddress: PublicKey | null;
-    buds: Map<string, BudAccount>;
+    buds: Map<string, BudData>;
     onBudSelect: (address: PublicKey) => void;
 }
+
 
 // ------------------------------------------------------------------
 // Types
@@ -372,7 +376,7 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
             className="tree-visualizer-container"
         >
             <BeachBackground />
-            
+
             <div
                 className="tree-world-viewport"
                 style={{

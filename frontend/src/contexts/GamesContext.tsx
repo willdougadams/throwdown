@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { GameService } from '../services/gameService';
+import { useWallet } from '@solana/wallet-adapter-react';
+
+import { useNetwork } from './NetworkContext';
+
 
 export interface GameListItem {
   id: string;
@@ -38,8 +40,9 @@ interface GamesContextType {
 const GamesContext = createContext<GamesContextType | undefined>(undefined);
 
 export function GamesProvider({ children }: { children: React.ReactNode }) {
-  const { connection } = useConnection();
+  const { connection, activeClient } = useNetwork();
   const { publicKey } = useWallet();
+
   const [allGames, setAllGames] = useState<GameListItem[]>([]);
   const [userGames, setUserGames] = useState<UserGame[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,16 +58,17 @@ export function GamesProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
-      const gameService = new GameService(connection);
-
       // Fetch all games for the lobby
-      const fetchedGames = await gameService.getFormattedGamesForLobby();
+      const fetchedGames = await activeClient.getLobbyGames('rps');
+
       console.log('Fetched games:', fetchedGames);
       setAllGames(fetchedGames);
 
       // If user is connected, filter their games
       if (publicKey) {
-        const rawGames = await gameService.fetchAllGames();
+        // Fallback or specific logic for user games if Trustful client doesn't support batching well
+        // For now, using activeClient to get details for each game
+        const rawGames = await activeClient.getLobbyGames('rps');
         const userParticipatingGames = [];
 
         for (const game of rawGames) {
@@ -73,14 +77,16 @@ export function GamesProvider({ children }: { children: React.ReactNode }) {
 
           if (!isCreator) {
             try {
-              const gameDetails = await gameService.fetchGameDetails(game.game_address);
+              const gameDetails = await activeClient.getGameDetails('rps', game.id);
+
               if (gameDetails && gameDetails.players) {
                 isParticipating = gameDetails.players.some((player: any) =>
                   (player.pubkey || player.toString()) === publicKey.toString()
                 );
               }
             } catch (error) {
-              console.log('Error checking participation in game:', game.game_address);
+              console.log('Error checking participation in game:', game.id);
+
             }
           }
 
@@ -93,9 +99,10 @@ export function GamesProvider({ children }: { children: React.ReactNode }) {
         }
 
         const formattedUserGames: UserGame[] = userParticipatingGames.map((game: any) => ({
-          id: game.game_address,
+          id: game.id,
+
           status: game.state === 'WaitingForPlayers' ? 'waiting' :
-                 game.state === 'Finished' ? 'completed' : 'in_progress',
+            game.state === 'Finished' ? 'completed' : 'in_progress',
           maxPlayers: game.max_players,
           currentPlayers: game.current_players,
           isCreator: game.isCreator,

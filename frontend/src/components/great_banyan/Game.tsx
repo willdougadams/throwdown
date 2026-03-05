@@ -1,29 +1,31 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { keccak_256 } from 'js-sha3';
-import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { useWallet } from '@solana/wallet-adapter-react';
+
 import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import { theme } from '../../theme';
 import { GAME_RULES } from '../../config/gameRules';
 import { TreeVisualizer } from './TreeVisualizer';
 import { BudModal } from './BudModal';
+import { useNetwork } from '../../contexts/NetworkContext';
 import {
     findTreePda,
     findBudPda,
     findChildBudPda,
     findGameManagerPda,
-    BudAccount,
-    TreeAccount,
-    GameManagerAccount,
     PROGRAM_ID
 } from './utils';
+import { BudData, GameManagerData, TreeData } from '../../services/gameClient';
+
 
 export const GreatBanyanGame: React.FC = () => {
-    const { connection } = useConnection();
+    const { connection, activeClient } = useNetwork();
     const { publicKey, sendTransaction } = useWallet();
 
-    const [gameManager, setGameManager] = useState<GameManagerAccount | null>(null);
-    const [treeState, setTreeState] = useState<TreeAccount | null>(null);
-    const [buds, setBuds] = useState<Map<string, BudAccount>>(new Map());
+    const [gameManager, setGameManager] = useState<GameManagerData | null>(null);
+    const [treeState, setTreeState] = useState<TreeData | null>(null);
+    const [buds, setBuds] = useState<Map<string, BudData>>(new Map());
+
     const [rootAddress, setRootAddress] = useState<PublicKey | null>(null);
 
     const [selectedBudAddress, setSelectedBudAddress] = useState<PublicKey | null>(null);
@@ -31,161 +33,53 @@ export const GreatBanyanGame: React.FC = () => {
 
     // 1. Fetch Game Manager
     const fetchGameManager = useCallback(async () => {
-        if (!connection) return;
         try {
-            const [managerPda] = findGameManagerPda();
-            const info = await connection.getAccountInfo(managerPda);
-            if (!info) {
-                console.log("Game Manager not found (Game might not be initialized)");
-                return;
-            }
-
-            const data = info.data;
-            const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-
-            // GameManager Layout (Rust):
-            // current_epoch: u64 (0-8)
-            // prize_pool: u64 (8-16)
-            // authority: [u8; 32] (16-48)
-            // last_fruit_bud: [u8; 32] (48-80)
-            // last_fruit_prize: u64 (80-88)
-            // last_fruit_epoch: u64 (88-96)
-            // last_fruit_depth: u8 (96-97)
-
-            setGameManager({
-                currentEpoch: view.getBigUint64(0, true),
-                prizePool: view.getBigUint64(8, true),
-                authority: new PublicKey(data.subarray(16, 48)),
-                lastFruitBud: new PublicKey(data.subarray(48, 80)),
-                lastFruitPrize: view.getBigUint64(80, true),
-                lastFruitEpoch: view.getBigUint64(88, true),
-                lastFruitDepth: view.getUint8(96),
-            });
-
+            const manager = await activeClient.getBanyanManager();
+            if (manager) setGameManager(manager);
         } catch (e) {
             console.error("Failed to fetch game manager", e);
         }
-    }, [connection]);
+    }, [activeClient]);
+
 
     // 2. Fetch Tree State (depends on GameManager)
     const fetchTree = useCallback(async () => {
-        if (!gameManager || !connection) return;
+        if (!gameManager) return;
 
         try {
-            const [treePda] = findTreePda(gameManager.currentEpoch);
-            const accountInfo = await connection.getAccountInfo(treePda);
-
-            if (!accountInfo) {
-                console.log("Tree account not found for epoch", gameManager.currentEpoch.toString());
-                return;
+            const tree = await activeClient.getBanyanTree(BigInt(gameManager.currentEpoch));
+            if (tree) {
+                setTreeState(tree.state);
+                const treePda = new PublicKey(tree.address);
+                const [rootBudPda] = findBudPda(treePda, 'root');
+                setRootAddress(rootBudPda);
+                fetchBud(rootBudPda);
             }
-
-            const data = accountInfo.data;
-            const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-
-            let offset = 0;
-            const fruitFrequency = Number(view.getBigUint64(offset, true));
-            offset += 8;
-
-            const authority = new PublicKey(data.subarray(offset, offset + 32));
-            offset += 32;
-
-            const vitalityRequiredBase = Number(view.getBigUint64(offset, true));
-
-            setTreeState({
-                fruitFrequency,
-                authority,
-                vitalityRequiredBase
-            });
-
-            // Find Root Bud
-            const [rootBudPda] = findBudPda(treePda, 'root');
-            setRootAddress(rootBudPda);
-
-            fetchBud(rootBudPda);
-
         } catch (e) {
             console.error("Failed to fetch tree", e);
         }
-    }, [connection, gameManager]);
+    }, [activeClient, gameManager]);
+
 
     // Fetch Bud Helper
     const fetchBud = async (address: PublicKey) => {
-        if (!connection) return;
         try {
-            const info = await connection.getAccountInfo(address);
-            if (!info) return;
+            const bud = await activeClient.getBanyanBud(address.toString());
+            if (!bud) return;
 
-            const data = info.data;
-            const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+            setBuds(prev => new Map(prev).set(address.toString(), bud));
 
-            // Bud Layout (Rust):
-            // parent: 32 (0-32)
-            // vitality_current: 8 (32-40)
-            // vitality_required: 8 (40-48)
-            // depth: 1 (48-49)
-            // is_bloomed: 1 (49-50)
-            // is_fruit: 1 (50-51)
-            // contribution_count: 1 (51-52)
-            // is_payout_complete: 1 (52-53)
-            // _padding: 3 (53-56)
-            // contributions: [Contribution; 10] (56-456) -> Each Contribution is { key: 32, vitality: 8 }
-
-            let offset = 0;
-            const parent = new PublicKey(data.subarray(offset, offset + 32));
-            offset += 32;
-
-            const vitalityCurrent = view.getBigUint64(offset, true);
-            offset += 8;
-            const vitalityRequired = view.getBigUint64(offset, true);
-            offset += 8;
-
-            const depth = data[offset]; offset += 1;
-            const isBloomed = data[offset] !== 0; offset += 1;
-            const isFruit = data[offset] !== 0; offset += 1;
-            const contributionCount = data[offset]; offset += 1;
-            const isPayoutComplete = data[offset] !== 0; offset += 1;
-
-            offset += 3; // padding
-
-            const contributions: [PublicKey, bigint][] = [];
-            for (let i = 0; i < 10; i++) {
-                const pk = new PublicKey(data.subarray(offset, offset + 32));
-                offset += 32;
-                const amount = view.getBigUint64(offset, true);
-                offset += 8;
-                if (i < contributionCount) {
-                    contributions.push([pk, amount]);
-                }
-            }
-
-            const budAcc: BudAccount = {
-                parent,
-                depth,
-                vitalityCurrent,
-                vitalityRequired,
-                isBloomed,
-                isFruit,
-                isPayoutComplete,
-                contributionCount,
-                contributions
-            };
-
-            setBuds(prev => new Map(prev).set(address.toString(), budAcc));
-
-            // If bloomed, fetch children
-            if (isBloomed) {
+            if (bud.isBloomed) {
                 const [left] = findChildBudPda(address, 'left');
                 const [right] = findChildBudPda(address, 'right');
-                // Avoid infinite loops if already fetched
                 if (!buds.has(left.toString())) fetchBud(left);
                 if (!buds.has(right.toString())) fetchBud(right);
             }
-
         } catch (e) {
             console.error("Failed to fetch bud", address.toString(), e);
         }
     };
+
 
     // Refresh loop
     useEffect(() => {
@@ -283,9 +177,10 @@ export const GreatBanyanGame: React.FC = () => {
             // Accounts: [payer, manager, bud, system_program, tree, left, right]
             const [managerPda] = findGameManagerPda();
             if (!gameManager) throw new Error("Game Manager not loaded");
-            const [treePda] = findTreePda(gameManager.currentEpoch);
+            const [treePda] = findTreePda(BigInt(gameManager.currentEpoch));
             const [leftPda] = findChildBudPda(selectedBudAddress, 'left');
             const [rightPda] = findChildBudPda(selectedBudAddress, 'right');
+
 
             const tx = new Transaction().add({
                 keys: [
@@ -353,9 +248,10 @@ export const GreatBanyanGame: React.FC = () => {
             ];
 
             // Add contributors
-            for (const [pk, _] of bud.contributions) {
-                keys.push({ pubkey: pk, isSigner: false, isWritable: true });
+            for (const { pubkey: pkStr, amount: _ } of bud.contributions) {
+                keys.push({ pubkey: new PublicKey(pkStr), isSigner: false, isWritable: true });
             }
+
 
             // ADD NURTURER (cranker) as the last account
             keys.push({ pubkey: publicKey, isSigner: false, isWritable: true });
@@ -434,9 +330,10 @@ export const GreatBanyanGame: React.FC = () => {
             view.setBigUint64(1, fruitFreq, true);
             view.setBigUint64(9, vitalityReq, true);
 
-            const [treePda] = findTreePda(gameManager.currentEpoch);
+            const [treePda] = findTreePda(BigInt(gameManager.currentEpoch));
             const [rootBudPda] = findBudPda(treePda, 'root');
             const [managerPda] = findGameManagerPda();
+
 
             const tx = new Transaction().add({
                 keys: [

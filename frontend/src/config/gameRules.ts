@@ -1,7 +1,7 @@
 export const GAME_RULES = {
     // Probability of a bud blooming into a fruit (1 in N)
     // Higher N = rarer fruit, larger trees.
-    FRUIT_FREQUENCY: 100n,
+    FRUIT_FREQUENCY: 256n,
 
     // The base amount of vitality required to bloom a bud.
     VITALITY_REQUIRED_BASE: 10n,

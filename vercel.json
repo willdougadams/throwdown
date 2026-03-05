@@ -1,14 +1,23 @@
 {
   "buildCommand": "cd frontend && yarn vite build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "cd frontend && yarn install --frozen-lockfile",
+  "installCommand": "yarn install --frozen-lockfile && cd frontend && yarn install --frozen-lockfile && cd ../api && npm install",
   "framework": null,
   "build": {
     "env": {
       "NODE_OPTIONS": "--max-old-space-size=8192"
     }
   },
+  "functions": {
+    "api/src/index.ts": {
+      "runtime": "vercel-node@latest"
+    }
+  },
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/src/index.ts"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
