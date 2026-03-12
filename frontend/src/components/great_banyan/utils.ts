@@ -2,20 +2,11 @@ import { PublicKey } from '@solana/web3.js';
 
 import { getProgramId } from '../../config/programIds';
 
-let resolvedProgramId: PublicKey;
-try {
-    resolvedProgramId = getProgramId('banyan');
-} catch (e) {
-    console.error('[Banyan/utils] Failed to resolve program ID, defaulting to devnet placeholder', e);
-    // Use a well-known devnet ID or the system program as a safety boot if everything fails
-    resolvedProgramId = new PublicKey('8FkJUUZFMkhXkXHqcx3aLxvE54z89JofKJbvoxzKLmGg');
-}
-
-export const PROGRAM_ID = resolvedProgramId;
+export const PROGRAM_ID = getProgramId('banyan');
 
 export const findGameManagerPda = (): [PublicKey, number] => {
     return PublicKey.findProgramAddressSync(
-        [new TextEncoder().encode('manager_v1')],
+        [new TextEncoder().encode('manager_v2')],
         PROGRAM_ID
     );
 };

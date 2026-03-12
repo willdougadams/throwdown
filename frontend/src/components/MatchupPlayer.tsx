@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { Circle, FileText, Scissors, Lock, HelpCircle, Minus, Zap, Wind, Sparkles } from 'lucide-react';
 import { createWeb3ProgramClient } from '../services/web3ProgramClient';

@@ -99,7 +99,7 @@ async function main() {
 
     // --- Helpers ---
     const findGameManagerPda = () =>
-        PublicKey.findProgramAddressSync([Buffer.from("manager_v1")], PROGRAM_ID);
+        PublicKey.findProgramAddressSync([Buffer.from("manager_v3")], PROGRAM_ID);
 
     const findTreePda = (epoch: bigint) => {
         const epochBuf = Buffer.alloc(8);
@@ -240,6 +240,8 @@ async function main() {
 
             if (!bud.isBloomed && !bud.isFruit) {
                 actionable.push(bud);
+            } else if (bud.vitalityCurrent >= bud.vitalityRequired && !bud.isBloomed) {
+                 actionable.push(bud);
             }
 
             if (bud.isBloomed) {
@@ -281,7 +283,7 @@ async function main() {
 
         for (let i = 0n; i < 5000n; i++) {
             buffer.writeBigUInt64LE(i, nonceOffset);
-            const hash = keccak_256.array(buffer);
+            const hash = keccak_256.array(new Uint8Array(buffer));
             const gain = (hash[0] % 3) + 3;
 
             if (gain > bestGain) {

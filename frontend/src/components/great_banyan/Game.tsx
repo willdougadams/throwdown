@@ -81,14 +81,42 @@ export const GreatBanyanGame: React.FC = () => {
     };
 
 
-    // Refresh loop
+    // Refresh loop (fallback for polling if no SSE)
     useEffect(() => {
         const interval = setInterval(() => {
             fetchGameManager();
             if (gameManager) fetchTree();
-        }, 5000);
+        }, 15000); // Slowed down since SSE handles real-time mostly
         return () => clearInterval(interval);
     }, [fetchGameManager, fetchTree, gameManager]);
+
+    // Real-time SSE listener
+    useEffect(() => {
+        if (activeClient.onBanyanUpdate) {
+            console.log("Subscribing to real-time Banyan updates...");
+            const unsub = activeClient.onBanyanUpdate((event: any) => {
+                console.log("Real-time update:", event.type);
+                if (event.type === 'manager') {
+                    setGameManager(event.data);
+                } else if (event.type === 'tree') {
+                    setTreeState(event.data);
+                    if (!rootAddress) {
+                        const treePda = new PublicKey(event.address);
+                        const [rootBudPda] = findBudPda(treePda, 'root');
+                        setRootAddress(rootBudPda);
+                        fetchBud(rootBudPda);
+                    }
+                } else if (event.type === 'bud') {
+                    setBuds(prev => {
+                        const next = new Map(prev);
+                        next.set(event.address, event.data);
+                        return next;
+                    });
+                }
+            });
+            return () => unsub();
+        }
+    }, [activeClient, rootAddress, fetchBud]);
 
     // Initial load
     useEffect(() => {

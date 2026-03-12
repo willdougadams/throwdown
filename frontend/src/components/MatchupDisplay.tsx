@@ -1,8 +1,8 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { MatchupTile } from './MatchupTile';
 import { Trophy } from 'lucide-react';
 import { theme } from '../theme';
+import { generateReadableName } from '../utils/nameGenerator';
 import { Move, MatchState, GameState, Player, MatchupPlayerData, Matchup } from '../types/game';
 
 interface GameData {
@@ -209,8 +209,8 @@ export function MatchupDisplay({
                         color: theme.colors.text.secondary,
                         fontFamily: 'monospace',
                         marginBottom: theme.spacing.lg
-                    }}>
-                        {`${gameData.winner.publicKey.slice(0, 8)}...${gameData.winner.publicKey.slice(-8)}`}
+                    }} title={gameData.winner.publicKey}>
+                        {generateReadableName(gameData.winner.publicKey)}
                     </div>
 
                     {currentUserPublicKey === gameData.winner.publicKey && (

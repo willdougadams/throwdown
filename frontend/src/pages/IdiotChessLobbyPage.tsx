@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -6,12 +6,12 @@ import { createWeb3ProgramClient } from '../services/web3ProgramClient';
 import { GameService } from '../services/gameService';
 import { Swords, Trophy, Users, X, Info, ChevronRight, Play } from 'lucide-react';
 import { theme } from '../theme';
+import { generateReadableName } from '../utils/nameGenerator';
 import { useToast } from '../contexts/ToastContext';
 
 interface Challenge {
     id: string;
     creator: string;
-    name: string;
     buyInSOL: number;
     status: 'waiting' | 'in_progress' | 'completed';
     players: string[];
@@ -91,11 +91,10 @@ function PawnMoveDiagram() {
 function CreateChessChallengeModal({ isOpen, onClose, onCreate }: {
     isOpen: boolean;
     onClose: () => void;
-    onCreate: (entryFee: number, gameName: string) => void;
+    onCreate: (entryFee: number) => void;
 }) {
     const { t } = useTranslation();
     const [entryFee, setEntryFee] = useState(0.1);
-    const [gameName, setGameName] = useState('');
 
     if (!isOpen) return null;
 
@@ -116,20 +115,6 @@ function CreateChessChallengeModal({ isOpen, onClose, onCreate }: {
                     <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.colors.text.secondary, cursor: 'pointer' }} aria-label={t('common.cancel')}><X size={24} /></button>
                 </div>
 
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ color: theme.colors.text.secondary, display: 'block', marginBottom: '0.5rem' }}>{t('chess.create_modal.game_name')}</label>
-                    <input
-                        type="text"
-                        placeholder={t('chess.create_modal.game_name_placeholder')}
-                        value={gameName}
-                        onChange={e => setGameName(e.target.value)}
-                        style={{
-                            width: '100%', padding: '0.8rem', borderRadius: '8px',
-                            backgroundColor: theme.colors.background, border: `1px solid ${theme.colors.border}`,
-                            color: theme.colors.text.primary, fontSize: '1rem'
-                        }}
-                    />
-                </div>
 
                 <div style={{ marginBottom: '2rem' }}>
                     <label style={{ color: theme.colors.text.secondary, display: 'block', marginBottom: '0.5rem' }}>{t('chess.create_modal.entry_fee')}</label>
@@ -148,7 +133,10 @@ function CreateChessChallengeModal({ isOpen, onClose, onCreate }: {
                 </div>
 
                 <button
-                    onClick={() => onCreate(entryFee, gameName || `Chess Match`)}
+                    onClick={() => {
+                        console.log('[ChessLobby] Create button clicked', { entryFee });
+                        onCreate(entryFee);
+                    }}
                     style={{
                         width: '100%', padding: '1rem', backgroundColor: theme.colors.primary.main,
                         color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
@@ -207,17 +195,19 @@ export default function IdiotChessLobbyPage() {
         return () => clearInterval(interval);
     }, [refreshChallenges]);
 
-    const handleCreateChallenge = async (fee: number, name: string) => {
+    const handleCreateChallenge = async (fee: number) => {
+        console.log('[ChessLobby] handleCreateChallenge called', { fee });
         if (!connected) {
+            console.warn('[ChessLobby] Cannot create challenge: Not connected');
             showToast(t('common.connect_wallet'), 'error');
             return;
         }
         const toastId = showToast(t('chess.toasts.creating'), 'loading');
         try {
+            console.log('[ChessLobby] Initializing Web3ProgramClient...');
             const client = createWeb3ProgramClient(connection, wallet, 'chess');
             const result = await client.createChessChallenge({
-                entryFee: fee,
-                gameName: name
+                entryFee: fee
             });
             updateToast(toastId, t('chess.toasts.created'), 'success');
             setShowCreateModal(false);
@@ -383,7 +373,7 @@ export default function IdiotChessLobbyPage() {
                                         transition: 'all 0.2s',
                                     }}>
                                         <div>
-                                            <h3 style={{ margin: '0 0 0.5rem 0', color: theme.colors.text.primary }}>{challenge.name}</h3>
+                                            <h3 style={{ margin: '0 0 0.5rem 0', color: theme.colors.text.primary }}>{t('chess.game.title_match')}</h3>
                                             <div style={{ display: 'flex', gap: '1.5rem', color: theme.colors.text.secondary, fontSize: '0.9rem' }}>
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                     <Trophy size={14} color={theme.colors.warning} /> {challenge.buyInSOL} SOL
@@ -391,8 +381,8 @@ export default function IdiotChessLobbyPage() {
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                     <Users size={14} /> {challenge.players.length}/2 {t('common.players')}
                                                 </span>
-                                                <span style={{ opacity: 0.7 }}>
-                                                    By {challenge.creator.slice(0, 4)}...{challenge.creator.slice(-4)}
+                                                <span style={{ opacity: 0.7 }} title={challenge.creator}>
+                                                    By {generateReadableName(challenge.creator)}
                                                 </span>
                                             </div>
                                         </div>

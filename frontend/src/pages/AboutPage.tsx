@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../theme';
-import { Shield, Coins, Users, Rocket, Code2, Globe, Cpu, Zap } from 'lucide-react';
+import { Shield, Coins, Rocket, Code2, Globe } from 'lucide-react';
 
 interface SectionProps {
     title: string;

@@ -31,9 +31,10 @@ export class GameService {
     async fetchAllGames(programType: 'rps' | 'chess' = 'rps'): Promise<GameIndexEntry[]> {
         try {
             const programId = getProgramId(programType);
-            const dataSize = programType === 'chess' ? 272 : 528;
+            const dataSize = 208; // UPDATED: Both programs now use 208 bytes
 
-            console.log(`Fetching all ${programType} game accounts (size: ${dataSize})...`);
+            console.log(`[GameService] Fetching all ${programType} game accounts (size: ${dataSize})...`);
+            console.log(`[GameService] Program ID: ${programId.toBase58()}`);
 
             const accounts = await this.connection.getProgramAccounts(programId, {
                 commitment: 'confirmed',

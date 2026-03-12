@@ -35,19 +35,17 @@ describe('TransactionPacker', () => {
     test('should pack CreateChallenge instruction correctly', () => {
       const buyInLamports = BigInt('100000000'); // 0.1 SOL
       const movesHash = new Uint8Array(32).fill(1);
-      const name = 'Test Game';
+      const result = TransactionPacker.packCreateChallenge(buyInLamports, movesHash);
 
-      const result = TransactionPacker.packCreateChallenge(buyInLamports, movesHash, name);
-
-      // Format: [disc: u8][buy_in: u64][hash: [u8; 32]][name_len: u8][name: [u8; name_len]]
-      // 1 + 8 + 32 + 1 + 9 = 51
-      expect(result.length).toBe(51);
+      // Format: [disc: u8][buy_in: u64][hash: [u8; 32]]
+      // 1 + 8 + 32 = 41
+      expect(result.length).toBe(41);
       expect(result[0]).toBe(InstructionType.CreateChallenge);
 
       const view = new DataView(result.buffer);
       expect(view.getBigUint64(1, true)).toBe(buyInLamports);
       expect(result.slice(9, 41)).toEqual(movesHash);
-      expect(result[41]).toBe(9); // name_len
+
     });
   });
 

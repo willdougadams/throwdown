@@ -1,5 +1,5 @@
 import React from 'react';
-import { GameState, BOARD_SIZE } from './GameEngine';
+import { GameState } from './GameEngine';
 import { theme } from '../../theme';
 import { User, Cpu, Hash } from 'lucide-react';
 

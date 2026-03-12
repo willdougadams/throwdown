@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import ThemeSelector from './ThemeSelector';
 import NetworkSelector from './NetworkSelector';
 import AirdropButton from './AirdropButton';
-import { Home, Wallet, Swords, Grip, Trees, Info, ChevronDown, ChevronUp, Settings2, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Home, Wallet, Swords, Trees, Info, ChevronDown, ChevronUp, Settings2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { theme } from '../theme';
 import { BanyanLogo } from './index';
 import { useNetwork } from '../contexts/NetworkContext';
@@ -138,16 +138,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false }) => {
                     active={currentPath === '/'}
                 />
                 <NavButton
-                    onClick={() => navigate('/rps-lobby')}
+                    onClick={() => navigate('/lobby')}
                     icon={Swords}
-                    label={t('sidebar.nav.rps')}
-                    active={currentPath === '/rps-lobby' || currentPath.startsWith('/game/')}
-                />
-                <NavButton
-                    onClick={() => navigate('/idiot-chess-lobby')}
-                    icon={Grip}
-                    label={t('sidebar.nav.chess')}
-                    active={currentPath === '/idiot-chess-lobby' || currentPath.startsWith('/idiot-chess')}
+                    label={t('sidebar.nav.lobby', 'Lobby')}
+                    active={currentPath === '/lobby' || currentPath === '/rps-lobby' || currentPath === '/idiot-chess-lobby' || currentPath.startsWith('/game/') || currentPath.startsWith('/idiot-chess')}
                 />
                 <NavButton
                     onClick={() => navigate('/great-banyan')}

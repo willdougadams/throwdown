@@ -98,7 +98,7 @@ pub fn process_instruction(
     instruction_data: &[u8],
 ) -> ProgramResult {
     msg!("ProcessInstruction entry. Data len: {}", instruction_data.len());
-    if instruction_data.len() > 0 {
+    if !instruction_data.is_empty() {
         msg!("First byte: {}", instruction_data[0]);
     }
 
@@ -113,6 +113,7 @@ pub fn process_instruction(
     match instruction {
         BanyanInstruction::InitializeGame => {
             msg!("Instruction: InitializeGame");
+            msg!("Program ID Bytes: {:?}", *program_id);
             let payer = next_account_info(account_iter)?;
             let manager_info = next_account_info(account_iter)?;
             let manager_authority_info = next_account_info(account_iter)?;
@@ -125,7 +126,7 @@ pub fn process_instruction(
             }
             msg!("Payer is signer");
 
-            let seeds: &[&[u8]] = &[b"manager_v1"];
+            let seeds: &[&[u8]] = &[b"manager_v3"];
             let (manager_pda, manager_bump) = find_pda(seeds, program_id);
             msg!("Manager PDA: {:?}, bump: {}", manager_pda, manager_bump);
             if manager_pda != *manager_info.key() {
@@ -151,7 +152,7 @@ pub fn process_instruction(
                 system_program,
                 program_id,
                 bytemuck::bytes_of(&manager),
-                &[b"manager_v1", &[manager_bump]],
+                &[b"manager_v3", &[manager_bump]],
             )?;
 
             solana_program::msg!("Manager initialized successfully");
@@ -220,15 +221,22 @@ pub fn process_instruction(
 
             let root_bud = Bud {
                 parent: *tree_state_info.key(),
-                vitality_current: 0,
+                vitality_current: tree_state.vitality_required_base,
                 vitality_required: tree_state.vitality_required_base,
                 depth: 0,
                 is_bloomed: 0,
                 is_fruit: 0,
-                contribution_count: 0,
+                contribution_count: 1,
                 is_payout_complete: 0,
                 _padding: [0u8; 3],
-                contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
+                contributions: {
+                    let mut contribs = [Contribution { key: [0u8; 32], vitality: 0 }; 10];
+                    contribs[0] = Contribution {
+                        key: *payer.key(),
+                        vitality: tree_state.vitality_required_base,
+                    };
+                    contribs
+                },
             };
             
             create_account_with_space(
@@ -301,7 +309,7 @@ pub fn process_instruction(
             
             let data = manager_info.try_borrow_mut_data()?;
             let manager_ptr = data.as_ptr() as *mut GameManager;
-            unsafe { *manager_ptr = manager.clone() };
+            unsafe { *manager_ptr = manager };
             
             // 2. PoW / Vitality Logic
             let clock = Clock::get()?;
@@ -423,7 +431,7 @@ pub fn process_instruction(
                         let left_child = Bud {
                             parent: *bud_info.key(),
                             vitality_current: 1,
-                            vitality_required: 10,
+                            vitality_required: tree_state.vitality_required_base + child_depth as u64,
                             is_payout_complete: 0,
                             depth: child_depth,
                             is_bloomed: 0,
@@ -458,7 +466,7 @@ pub fn process_instruction(
                         let right_child = Bud {
                             parent: *bud_info.key(),
                             vitality_current: 1,
-                            vitality_required: 10,
+                            vitality_required: tree_state.vitality_required_base + child_depth as u64,
                             is_payout_complete: 0,
                             depth: child_depth,
                             is_bloomed: 0,
@@ -534,8 +542,8 @@ pub fn process_instruction(
                 msg!("No prize to distribute");
                 return Ok(());
             }
-            let even_pool = total_prize / 2;
-            let expo_pool = total_prize / 2;
+            let even_pool = total_prize / 5; // 20% for "Stability"
+            let expo_pool = (total_prize * 4) / 5; // 80% for "Equity" (balanced EV)
 
             let num_nodes = (manager.last_fruit_depth as u64) + 1;
             let node_even_share = even_pool / num_nodes;
@@ -616,7 +624,7 @@ pub fn process_instruction(
         BanyanInstruction::DistributeBatchReward { bud_count } => {
             msg!("Instruction: DistributeBatchReward");
             let nurturer = next_account_info(account_iter)?;
-            let manager_info = next_account_info(account_iter)?;
+            let _manager_info = next_account_info(account_iter)?;
 
             if !nurturer.is_signer() {
                 return Err(ProgramError::MissingRequiredSignature);
@@ -765,18 +773,24 @@ fn invoke_transfer(
 
 #[cfg(not(target_os = "solana"))]
 #[no_mangle]
+/// # Safety
+/// This function is intended for mock testing environments off-chain.
 pub unsafe extern "C" fn sol_memset_(s: *mut u8, c: u8, n: usize) {
     std::ptr::write_bytes(s, c, n);
 }
 
 #[cfg(not(target_os = "solana"))]
 #[no_mangle]
+/// # Safety
+/// This function is intended for mock testing environments off-chain.
 pub unsafe extern "C" fn sol_memcpy_(dst: *mut u8, src: *const u8, n: usize) {
     std::ptr::copy_nonoverlapping(src, dst, n);
 }
 
 #[cfg(not(target_os = "solana"))]
 #[no_mangle]
+/// # Safety
+/// This function is intended for mock testing environments off-chain.
 pub unsafe extern "C" fn sol_memmove_(dst: *mut u8, src: *const u8, n: usize) {
     std::ptr::copy(src, dst, n);
 }

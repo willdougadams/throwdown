@@ -1,6 +1,7 @@
 import React from 'react';
 import { PublicKey } from '@solana/web3.js';
 import { theme } from '../../theme';
+import { generateReadableName } from '../../utils/nameGenerator';
 import { BudData, GameManagerData } from '../../services/gameClient';
 
 
@@ -200,8 +201,8 @@ export const BudModal: React.FC<BudModalProps> = ({
                         <div style={{ fontSize: '0.875rem', backgroundColor: theme.colors.background, padding: '0.5rem', borderRadius: '8px' }}>
                             <ul style={{ margin: 0, paddingLeft: '1.2rem', listStyle: 'circle' }}>
                                 {bud.contributions.map(({ pubkey, amount }, idx) => (
-                                    <li key={idx}>
-                                        {pubkey.toString().slice(0, 4)}...{pubkey.toString().slice(-4)}: <strong>{amount.toString()}</strong>
+                                    <li key={idx} title={pubkey.toString()}>
+                                        {generateReadableName(pubkey.toString())}: <strong>{amount.toString()}</strong>
                                     </li>
                                 ))}
 

@@ -4,8 +4,7 @@ import dotenv from 'dotenv';
 import lobbyRoutes from './routes/lobby';
 import banyanRoutes from './routes/banyan';
 import gameRoutes from './routes/game';
-
-
+import { subscriptionManager } from './services/subscriptionManager';
 
 dotenv.config();
 
@@ -31,6 +30,7 @@ app.use('/', router);
 if (require.main === module) {
     app.listen(port, () => {
         console.log(`Trustful API listening at http://localhost:${port}`);
+        subscriptionManager.startListening();
     });
 }
 

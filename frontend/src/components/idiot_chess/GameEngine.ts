@@ -25,8 +25,7 @@ export interface GameState {
 
 export const BOARD_SIZE = 5;
 
-// Helper to generate IDs
-const generateId = () => Math.random().toString(36).substr(2, 9);
+
 
 export const INITIAL_BOARD: (Piece | null)[][] = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
 

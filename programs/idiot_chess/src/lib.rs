@@ -90,18 +90,17 @@ pub struct PlayerData {
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GameAccount {
     pub creator: Pubkey,                          // 32
-    pub name: [u8; 64],                           // 64 -> 96
-    pub last_action_timestamp: i64,               // 8  -> 104
-    pub buy_in_lamports: u64,                     // 8  -> 112
-    pub prize_pool: u64,                          // 8  -> 120
-    pub white_time_seconds: i64,                  // 8  -> 128
-    pub black_time_seconds: i64,                  // 8  -> 136
-    pub players: [PlayerData; MAX_PLAYERS],       // 2 * 40 = 80 -> 216
-    pub board: [[Piece; BOARD_SIZE]; BOARD_SIZE], // 5 * 5 * 2 = 50 -> 266
-    pub turn: Player,                             // 1 -> 267
-    pub winner: Winner,                           // 1 -> 268
-    pub move_count: u8,                           // 1 -> 269
-    pub _padding: [u8; 3],                        // 3 -> 272 (8-byte aligned)
+    pub last_action_timestamp: i64,               // 8  -> 40
+    pub buy_in_lamports: u64,                     // 8  -> 48
+    pub prize_pool: u64,                          // 8  -> 56
+    pub white_time_seconds: i64,                  // 8  -> 64
+    pub black_time_seconds: i64,                  // 8  -> 72
+    pub players: [PlayerData; MAX_PLAYERS],       // 2 * 40 = 80 -> 152
+    pub board: [[Piece; BOARD_SIZE]; BOARD_SIZE], // 5 * 5 * 2 = 50 -> 202
+    pub turn: Player,                             // 1 -> 203
+    pub winner: Winner,                           // 1 -> 204
+    pub move_count: u8,                           // 1 -> 205
+    pub _padding: [u8; 3],                        // 3 -> 208 (8-byte aligned)
 }
 // Sum of fields: 32+64+8+8+8+8+8+(2*40)+(25*2)+1+1+1+3 = 272
 // 272 / 8 = 34 (Perfectly aligned)
@@ -130,14 +129,12 @@ pub fn process_instruction(
     msg!("Chess: process_instruction. Data len: {}", instruction_data.len());
     match instruction_data[0] {
         0 => {
-            // CreateChallenge: [0] disc, [1..9] buy_in, [9] name_len, [10..] name
-            if instruction_data.len() < 10 {
+            // CreateChallenge: [0] disc, [1..9] buy_in
+            if instruction_data.len() < 9 {
                 return Err(ProgramError::InvalidInstructionData);
             }
             let buy_in = u64::from_le_bytes(instruction_data[1..9].try_into().unwrap());
-            let name_len = instruction_data[9] as usize;
-            let name = &instruction_data[10..10 + name_len];
-            create_challenge(_program_id, accounts, buy_in, name)
+            create_challenge(_program_id, accounts, buy_in)
         }
         1 => accept_challenge(_program_id, accounts),
         2 => {
@@ -167,7 +164,6 @@ fn create_challenge(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     buy_in_lamports: u64,
-    name: &[u8],
 ) -> ProgramResult {
     let [creator, game_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
         return Err(ProgramError::NotEnoughAccountKeys);
@@ -187,8 +183,6 @@ fn create_challenge(
 
     // Initialize GameAccount
     game.creator = *creator.key();
-    let name_len = name.len().min(64);
-    game.name[..name_len].copy_from_slice(&name[..name_len]);
     
     // Setup Initial Board
     // White (y=0,1)
@@ -315,11 +309,10 @@ fn make_move(
     let mut valid = false;
     if piece.piece_type == PieceType::King {
         // King moves 1 in any direction
-        if dx <= 1 && dy <= 1 && (dx > 0 || dy > 0) {
-            if target.piece_type == PieceType::None || target.player != piece.player {
+        if dx <= 1 && dy <= 1 && (dx > 0 || dy > 0)
+            && (target.piece_type == PieceType::None || target.player != piece.player) {
                 valid = true;
             }
-        }
     } else {
         // Pawn moves
         let direction = if piece.player == Player::White { 1 } else { -1 };
@@ -349,12 +342,11 @@ fn make_move(
     game.board[f_y][f_x] = Piece { piece_type: PieceType::None, player: Player::White };
 
     // Promotion
-    if piece.piece_type == PieceType::Pawn {
-        if (piece.player == Player::White && t_y == BOARD_SIZE - 1) ||
-           (piece.player == Player::Black && t_y == 0) {
+    if piece.piece_type == PieceType::Pawn
+        && ((piece.player == Player::White && t_y == BOARD_SIZE - 1) ||
+           (piece.player == Player::Black && t_y == 0)) {
             game.board[t_y][t_x].piece_type = PieceType::King;
         }
-    }
 
     // Last Stand Logic
     if captured_piece.piece_type != PieceType::None {
@@ -386,7 +378,7 @@ fn make_move(
     }
 
     // Turn Switch
-    if (game.winner == Winner::None) {
+    if game.winner == Winner::None  {
         game.turn = if game.turn == Player::White { Player::Black } else { Player::White };
         if game.move_count >= DRAW_MOVE_COUNT {
             game.winner = Winner::Draw;
@@ -601,4 +593,28 @@ pub fn claim_prize(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResu
 
     msg!("Prize claimed!");
     Ok(())
+}
+
+#[cfg(not(target_os = "solana"))]
+#[no_mangle]
+/// # Safety
+/// This function is intended for mock testing environments off-chain.
+pub unsafe extern "C" fn sol_memset_(s: *mut u8, c: u8, n: usize) {
+    std::ptr::write_bytes(s, c, n);
+}
+
+#[cfg(not(target_os = "solana"))]
+#[no_mangle]
+/// # Safety
+/// This function is intended for mock testing environments off-chain.
+pub unsafe extern "C" fn sol_memcpy_(dst: *mut u8, src: *const u8, n: usize) {
+    std::ptr::copy_nonoverlapping(src, dst, n);
+}
+
+#[cfg(not(target_os = "solana"))]
+#[no_mangle]
+/// # Safety
+/// This function is intended for mock testing environments off-chain.
+pub unsafe extern "C" fn sol_memmove_(dst: *mut u8, src: *const u8, n: usize) {
+    std::ptr::copy(src, dst, n);
 }

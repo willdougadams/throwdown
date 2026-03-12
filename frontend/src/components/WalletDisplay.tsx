@@ -1,4 +1,5 @@
-import React from 'react';
+import { theme } from '../theme';
+import { generateReadableName } from '../utils/nameGenerator';
 
 interface WalletDisplayProps {
   publicKey: string;
@@ -8,13 +9,16 @@ interface WalletDisplayProps {
 
 export function WalletDisplay({ publicKey, isWinner, isCurrentUser }: WalletDisplayProps) {
   return (
-    <span style={{
-      fontFamily: 'monospace',
-      fontSize: '0.875rem',
-      fontWeight: isWinner ? 600 : 400,
-      color: isWinner ? '#4caf50' : 'inherit'
-    }}>
-      {publicKey.slice(0, 4)}...{publicKey.slice(-4)}
+    <span 
+      title={publicKey}
+      style={{
+        fontFamily: 'monospace',
+        fontSize: '0.875rem',
+        fontWeight: isWinner || isCurrentUser ? 600 : 400,
+        color: isWinner ? '#4caf50' : (isCurrentUser ? theme.colors.primary.main : 'inherit')
+      }}
+    >
+      {generateReadableName(publicKey)}{isCurrentUser ? ' (You)' : ''}
     </span>
   );
 }

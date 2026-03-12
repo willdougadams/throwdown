@@ -42,19 +42,14 @@ export class TransactionPacker {
    * Pack CreateChallenge instruction
    * Format: [disc: u8][buy_in: u64][hash: [u8; 32]][name_len: u8][name: [u8; name_len]]
    */
-  static packCreateChallenge(buyInLamports: bigint, movesHash: Uint8Array, name: string = ''): Uint8Array {
-    const nameBytes = new TextEncoder().encode(name.slice(0, 64));
-
-    // 1 (disc) + 8 (buy_in) + 32 (hash) + 1 (name_len) + name
-    const size = 42 + nameBytes.length;
-    const data = new Uint8Array(size);
+  static packCreateChallenge(buyInLamports: bigint, movesHash: Uint8Array): Uint8Array {
+    // 1 (disc) + 8 (buy_in) + 32 (hash)
+    const data = new Uint8Array(41);
     const view = new DataView(data.buffer);
 
     view.setUint8(0, InstructionType.CreateChallenge);
     view.setBigUint64(1, buyInLamports, true);
     data.set(movesHash, 9);
-    view.setUint8(41, nameBytes.length);
-    data.set(nameBytes, 42);
 
     return data;
   }
@@ -182,50 +177,35 @@ export class GameAccountDeserializer {
     const creator = new PublicKey(creatorBytes).toString();
     offset += 32;
 
-    // Read name (64 bytes) - stored on-chain in fixed array
-    const nameBytes = new Uint8Array(data.buffer, data.byteOffset + offset, 64);
-    const name = new TextDecoder().decode(nameBytes).replace(/\0/g, '').trim();
-    offset += 64;
-
-    // Read description (256 bytes) - stored on-chain in fixed array
-    const descriptionBytes = new Uint8Array(data.buffer, data.byteOffset + offset, 256);
-    const description = new TextDecoder().decode(descriptionBytes).replace(/\0/g, '').trim();
-    offset += 256;
-
     // Read game metadata
     const max_players = view.getUint8(offset); offset += 1;
     const current_players = view.getUint8(offset); offset += 1;
     const state = view.getUint8(offset); offset += 1;
-    offset += 5; // _padding (354 + 1 + 5 = 360, matching OFFSET_LAST_ACTION)
+    offset += 5; // _padding (35 + 5 = 40, matching OFFSET_LAST_ACTION)
     const last_action_timestamp = view.getBigInt64(offset, true); offset += 8;
     const buy_in_lamports = view.getBigUint64(offset, true); offset += 8;
     const prize_pool = view.getBigUint64(offset, true); offset += 8;
 
     // Read players array (fixed size: 2 players)
     const players = [];
-    const playerSize = 32 + 32 + 5 + 1 + 2; // pubkey + committed + revealed (5 moves) + eliminated + padding = 72
+    const playerSize = 72; // 32 + 32 + 5 + 1 + 2
 
-    for (let i = 0; i < MAX_PLAYERS; i++) {
+    for (let i = 0; i < 2; i++) {
       const playerOffset = offset + (i * playerSize);
 
-      // Check if we have enough data for this player
       if (playerOffset + playerSize > data.length) {
-        break; // Account too small, stop reading
+        break;
       }
 
       const pubkeyBytes = new Uint8Array(data.buffer, data.byteOffset + playerOffset, 32);
-
-      // Check if slot is empty (all zeros)
       const isEmptySlot = pubkeyBytes.every(byte => byte === 0);
+
       if (!isEmptySlot) {
         const pubkey = new PublicKey(pubkeyBytes);
         const moves_committed = new Uint8Array(data.buffer, data.byteOffset + playerOffset + 32, 32);
-
-        // Read revealed moves (5 bytes)
         const moves_revealed_bytes = new Uint8Array(data.buffer, data.byteOffset + playerOffset + 64, 5);
         const moves_revealed = Array.from(moves_revealed_bytes).map(byteVal => byteVal === 0 ? null : byteVal - 1);
-
-        const eliminated = view.getUint8(playerOffset + 69); // offset: 32 + 32 + 5
+        const eliminated = view.getUint8(playerOffset + 69);
 
         players.push({
           slot: i,
@@ -236,18 +216,14 @@ export class GameAccountDeserializer {
         });
       }
     }
-    offset += MAX_PLAYERS * playerSize;
 
-    // Bracket logic removed
-
-    // Convert state enum to string
     const stateNames = ['WaitingForPlayers', 'InProgress', 'Finished'];
     const stateName = stateNames[state] || 'Unknown';
 
     return {
       creator,
-      name,
-      description,
+      name: "",
+      description: "",
       max_players,
       buy_in_lamports,
       current_players,
@@ -319,24 +295,11 @@ export class AccountSizeCalculator {
    * Calculate space needed for a game account (fixed size with bytemuck)
    */
   static calculateGameAccountSize(): number {
-    // GameAccount struct size (all fields are fixed-size with bytemuck)
-    const baseSize =
-      32 +     // creator: Pubkey
-      64 +     // name: [u8; 64]
-      256 +    // description: [u8; 256]
-      1 +      // max_players: u8
-      1 +      // current_players: u8
-      1 +      // state: GameState (u8)
-      5 +      // _padding: [u8; 5] (to align i64 at 360)
-      8 +      // last_action_timestamp: i64
-      8 +      // buy_in_lamports: u64
-      8;       // prize_pool: u64
+    return 208;
+  }
 
-    // Players array: [PlayerData; 2]
-    const playerSize = 32 + 32 + 5 + 1 + 2; // pubkey + committed + revealed + eliminated + padding = 72
-    const playersSize = MAX_PLAYERS * playerSize;
-
-    return baseSize + playersSize;
+  static calculateChessAccountSize(): number {
+    return 208;
   }
 }
 
@@ -351,16 +314,11 @@ export enum ChessInstructionType {
 }
 
 export class ChessTransactionPacker {
-  static packCreateChallenge(buyInLamports: bigint, name: string = ''): Uint8Array {
-    const nameBytes = new TextEncoder().encode(name.slice(0, 64));
-    const data = new Uint8Array(10 + nameBytes.length);
+  static packCreateChallenge(buyInLamports: bigint): Uint8Array {
+    const data = new Uint8Array(9);
     const view = new DataView(data.buffer);
-
     view.setUint8(0, ChessInstructionType.CreateChallenge);
     view.setBigUint64(1, buyInLamports, true);
-    view.setUint8(9, nameBytes.length);
-    data.set(nameBytes, 10);
-
     return data;
   }
 
@@ -388,7 +346,7 @@ export class ChessTransactionPacker {
  */
 export class ChessGameAccountDeserializer {
   static deserialize(data: Uint8Array): any {
-    if (data.length < 256) {
+    if (data.length < 208) {
       return null;
     }
 
@@ -399,11 +357,6 @@ export class ChessGameAccountDeserializer {
     const creatorBytes = new Uint8Array(data.buffer, data.byteOffset + offset, 32);
     const creator = new PublicKey(creatorBytes).toString();
     offset += 32;
-
-    // name: [u8; 64]
-    const nameBytes = new Uint8Array(data.buffer, data.byteOffset + offset, 64);
-    const name = new TextDecoder().decode(nameBytes).replace(/\0/g, '').trim();
-    offset += 64;
 
     // last_action_timestamp: i64 (8)
     const last_action_timestamp = view.getBigInt64(offset, true);
@@ -459,7 +412,7 @@ export class ChessGameAccountDeserializer {
           const piece = {
             type: pieceType === 1 ? 'king' : 'pawn',
             player: player === 0 ? 'white' : 'black',
-            id: `onchain-${y}-${x}-${pieceType}-${player}`, // Synthetic ID for animation
+            id: `onchain-${y}-${x}-${pieceType}-${player}`,
             x,
             y,
             pieceType,
@@ -473,25 +426,20 @@ export class ChessGameAccountDeserializer {
     }
     offset += 50;
 
-    // turn: Player (1)
     const turnVal = view.getUint8(offset); offset += 1;
-    const turn = turnVal === 0 ? 'white' : 'black';
-
-    // winner: Winner (1)
     const winnerVal = view.getUint8(offset); offset += 1;
+    const move_count = view.getUint8(offset); offset += 1;
+
     const winnerMap = ['None', 'white', 'black', 'draw'];
     const winner = winnerMap[winnerVal] === 'None' ? null : winnerMap[winnerVal];
 
-    // move_count: u8 (1)
-    const move_count = view.getUint8(offset); offset += 1;
-
-    const result = {
+    return {
       creator,
-      name,
-      description: '', // Match GameService expectation
+      name: "",
+      description: '',
       last_action_timestamp: Number(last_action_timestamp),
       buy_in_lamports,
-      buyIn: Number(buy_in_lamports), // Match IdiotChessPage usage
+      buyIn: Number(buy_in_lamports),
       prize_pool,
       white_time_seconds: Number(white_time_seconds),
       black_time_seconds: Number(black_time_seconds),
@@ -499,16 +447,13 @@ export class ChessGameAccountDeserializer {
       playerWhite: players[0]?.pubkey || '',
       playerBlack: players[1]?.pubkey || '',
       board,
-      pieces: piecesList, // Match IdiotChessPage expectation
-      turn: turnVal, // Keep numeric turn for page component
-      winner: winnerVal === 0 ? null : winnerVal, // Keep numeric winner for page component
-      moveCount: move_count, // camelCase for page
+      pieces: piecesList,
+      turn: turnVal,
+      winner: winnerVal === 0 ? null : winnerVal,
+      moveCount: move_count,
       move_count,
       prizeClaimed: winnerVal !== 0 && players.every(p => p.eliminated),
       state: winner ? 'Finished' : (players.length < 2 ? 'WaitingForPlayers' : 'InProgress')
     };
-
-    console.log('[ChessDeserializer] Result:', result);
-    return result;
   }
 }

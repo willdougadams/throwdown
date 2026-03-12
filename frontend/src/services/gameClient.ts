@@ -47,4 +47,5 @@ export interface GameClient {
     getBanyanManager(): Promise<GameManagerData | null>;
     getBanyanTree(epoch: bigint): Promise<{ address: string; state: TreeData } | null>;
     getBanyanBud(address: string): Promise<BudData | null>;
+    onBanyanUpdate?(callback: (event: any) => void): () => void;
 }

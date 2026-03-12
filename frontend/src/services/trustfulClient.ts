@@ -2,9 +2,47 @@ import { GameClient, GameListItem, GameManagerData, TreeData, BudData } from './
 
 export class TrustfulClient implements GameClient {
     private baseUrl: string;
+    private eventSource: EventSource | null = null;
+    private banyanListeners: Set<(event: any) => void> = new Set();
 
     constructor(baseUrl: string = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '/api') {
         this.baseUrl = baseUrl;
+    }
+
+    public onBanyanUpdate(callback: (event: any) => void): () => void {
+        this.banyanListeners.add(callback);
+
+        if (!this.eventSource) {
+            this.connectSSE();
+        }
+
+        return () => {
+            this.banyanListeners.delete(callback);
+            if (this.banyanListeners.size === 0 && this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+        };
+    }
+
+    private connectSSE() {
+        this.eventSource = new EventSource(`${this.baseUrl}/banyan/stream`);
+        this.eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type !== 'connected') {
+                    for (const listener of this.banyanListeners) {
+                        listener(data);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to parse SSE message', e);
+            }
+        };
+        this.eventSource.onerror = (error) => {
+            console.error('SSE Error:', error);
+            // EventSource auto-reconnects, but we might want to log it
+        };
     }
 
     async getLobbyGames(type: 'rps' | 'chess'): Promise<GameListItem[]> {

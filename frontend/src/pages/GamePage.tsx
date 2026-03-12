@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useTranslation } from 'react-i18next';
@@ -16,16 +16,7 @@ const getMovesStorageKey = (userPubkey: string, gameId: string, round: number) =
   return `${userPubkey}-${gameId}-${round}`;
 };
 
-const saveMovesToLocalStorage = (userPubkey: string, gameId: string, round: number, moves: Move[], salt: bigint) => {
-  const key = getMovesStorageKey(userPubkey, gameId, round);
-  const data = {
-    moves,
-    salt: salt.toString(),
-    timestamp: Date.now()
-  };
-  localStorage.setItem(key, JSON.stringify(data));
-  console.log('Saved moves to localStorage:', { key, data });
-};
+
 
 const loadMovesFromLocalStorage = (userPubkey: string, gameId: string, round: number) => {
   const key = getMovesStorageKey(userPubkey, gameId, round);

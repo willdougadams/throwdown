@@ -10,7 +10,7 @@ const AirdropButton: React.FC = () => {
     const { connection } = useConnection();
     const { publicKey } = useWallet();
     const { network } = useNetwork();
-    const { showToast, updateToast, dismissToast } = useToast();
+    const { showToast, updateToast } = useToast();
     const [isRequesting, setIsRequesting] = useState(false);
 
     // Only show on devnet and localnet

@@ -17,10 +17,13 @@ import { spawn } from 'child_process';
 const RPC_URL = "http://127.0.0.1:8899";
 const connection = new Connection(RPC_URL, "confirmed");
 
+const rawProgramIds = JSON.parse(fs.readFileSync(path.join(__dirname, 'program-ids.json'), 'utf-8'));
+const networkProgramIds = rawProgramIds.localnet;
+
 const PROGRAM_IDS = {
-    banyan: new PublicKey("9nXYhenroxr6rhv7GmdwLWLm1aWBtK584X2XNj7nVgsr"),
-    rps: new PublicKey("9Ekz7fUvqvzVZ1MEPhBjPBvUnKGnbdCSv2sLhdVZZgUa"),
-    chess: new PublicKey("5jXyYa9DUNLEDRgSJLKeS4qFodk2AdyqFdDt1sMNyqFb")
+    banyan: new PublicKey(networkProgramIds.banyan),
+    rps: new PublicKey(networkProgramIds.rps),
+    chess: new PublicKey(networkProgramIds.chess)
 };
 
 // Alice & Bob

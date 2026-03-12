@@ -11,6 +11,7 @@ import { createWeb3ProgramClient } from '../services/web3ProgramClient';
 import { GameService } from '../services/gameService';
 import { useToast } from '../contexts/ToastContext';
 import { theme } from '../theme';
+import { generateReadableName } from '../utils/nameGenerator';
 import { Users, Shield, Cpu, RefreshCw, Trophy, ExternalLink } from 'lucide-react';
 
 interface IdiotChessPageProps {
@@ -297,7 +298,6 @@ const IdiotChessPage: React.FC<IdiotChessPageProps> = ({ gameId: propGameId, mod
                         whiteTime={gameState.whiteTimeSeconds}
                         blackTime={gameState.blackTimeSeconds}
                         activePlayer={gameState.winner ? null : gameState.turn}
-                        isLive={!!isLive}
                     />
                     <Board
                         engine={engineRef.current}
@@ -367,8 +367,9 @@ const IdiotChessPage: React.FC<IdiotChessPageProps> = ({ gameId: propGameId, mod
                                 </div>
                                 <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: '0.8rem', marginTop: '0.4rem' }}>
                                     <span style={{ color: theme.colors.text.secondary, fontSize: '0.8rem', display: 'block', marginBottom: '0.4rem' }}>{t('chess.game.opponent_addr')}:</span>
-                                    <div style={{ fontSize: '0.8rem', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        {onChainData.playerWhite === publicKey?.toString() ? onChainData.playerBlack.slice(0, 8) : onChainData.playerWhite.slice(0, 8)}...
+                                    <div style={{ fontSize: '0.8rem', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '0.5rem' }} 
+                                         title={onChainData.playerWhite === publicKey?.toString() ? onChainData.playerBlack : onChainData.playerWhite}>
+                                        {generateReadableName(onChainData.playerWhite === publicKey?.toString() ? onChainData.playerBlack : onChainData.playerWhite)}
                                         <ExternalLink size={12} />
                                     </div>
                                 </div>

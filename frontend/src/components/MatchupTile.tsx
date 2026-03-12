@@ -1,8 +1,7 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { theme } from '../theme';
 import { MatchupPlayer } from './MatchupPlayer';
-import { Matchup, MatchState } from '../types/game';
+import { Matchup } from '../types/game';
 
 interface MatchupTileProps {
   matchup: Matchup;

@@ -30,8 +30,7 @@
     "sidebar": {
         "nav": {
             "home": "Home",
-            "rps": "Rock Paper Scissors",
-            "chess": "Idiot Chess",
+            "lobby": "1v1 Lobby",
             "banyan": "Great Banyan",
             "about": "About"
         }
@@ -111,11 +110,11 @@
                     },
                     {
                         "title": "Phase 2: Growth & Social",
-                        "description": "In-game chat, player profiles, global leaderboards, and tournament bracket automation."
+                        "description": "In-game chat, player profiles, global leaderboards."
                     },
                     {
                         "title": "Phase 3: Ecosystem Expansion",
-                        "description": "Mobile PWA optimization, DAO-controlled prize pools, and SDK for community-built games."
+                        "description": "Mobile PWA optimization, and SDK for community-built games."
                     }
                 ]
             }
@@ -206,6 +205,14 @@
                 "fury": "Fury",
                 "serenity": "Serenity",
                 "trickery": "Trickery"
+            },
+            "strategy_descriptions": {
+                "fury_title": "Fury",
+                "fury_desc": "Fury captures the momentum of combat. It chooses the move that would have defeated your opponent's move from the previous round.",
+                "serenity_title": "Serenity",
+                "serenity_desc": "Serenity reflects a calm, unwavering spirit. It repeats the same move you performed in the previous round.",
+                "trickery_title": "Trickery",
+                "trickery_desc": "Trickery is the art of deception. It chooses the move that would have lost to your opponent's move from the previous round, luring them into a false sense of security."
             },
             "match_states": {
                 "waiting_for_players": "Waiting for Players",

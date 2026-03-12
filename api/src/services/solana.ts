@@ -7,10 +7,24 @@ const HELIUS_RPC_URL = process.env.HELIUS_RPC_URL || 'https://api.devnet.solana.
 
 export const connection = new Connection(HELIUS_RPC_URL, 'confirmed');
 
+import fs from 'fs';
+import path from 'path';
+
+let rawProgramIds: any = {};
+try {
+    const filePath = path.join(__dirname, '../../../scripts/program-ids.json');
+    rawProgramIds = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+} catch (e) {
+    console.warn('Could not load program-ids.json, falling back to defaults', e);
+}
+
+const network = process.env.NETWORK || 'devnet';
+const networkProgramIds = rawProgramIds[network] || rawProgramIds.devnet || {};
+
 export const programIds = {
-    banyan: new PublicKey('8FkJUUZFMkhXkXHqcx3aLxvE54z89JofKJbvoxzKLmGg'),
-    rps: new PublicKey('8KYGcmrzMW8bciXQCPn525GhPcb2hmeJs3SoHAHR3gGM'),
-    chess: new PublicKey('6VKrJHfFC22zgY62JJRWmDs3jgHjEdeLaxzgN86xrmg5'),
+    banyan: new PublicKey(networkProgramIds.banyan),
+    rps: new PublicKey(networkProgramIds.rps),
+    chess: new PublicKey(networkProgramIds.chess),
 };
 
 // Simple TTL Cache

@@ -66,45 +66,35 @@ pub struct PlayerData {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GameAccount {
-    pub creator: Pubkey,
-    pub name: [u8; 64],
-    pub description: [u8; 256],
-    pub max_players: u8,
-    pub current_players: u8,
-    pub state: GameState,
-    pub _padding: [u8; 5], // 352 + 1 + 1 + 1 + 5 = 360 (alignment for i64)
-    pub last_action_timestamp: i64,
-    pub buy_in_lamports: u64,
-    pub prize_pool: u64,
-    pub players: [PlayerData; MAX_PLAYERS],
+    pub creator: Pubkey,                          // 32
+    pub max_players: u8,                          // 1
+    pub current_players: u8,                      // 1
+    pub state: GameState,                         // 1
+    pub _padding: [u8; 5],                        // 5 -> offset 40
+    pub last_action_timestamp: i64,               // 8 -> offset 40
+    pub buy_in_lamports: u64,                     // 8 -> offset 48
+    pub prize_pool: u64,                          // 8 -> offset 56
+    pub players: [PlayerData; MAX_PLAYERS],       // 2 * 72 = 144 -> offset 64
 }
 
 // ============================================================================
 // Byte Offset Constants (for direct memory access)
 // ============================================================================
 
-const OFFSET_CREATOR: usize = 0;
-const OFFSET_NAME: usize = 32;
-const OFFSET_MAX_PLAYERS: usize = 352; // 32 + 64 + 256
-const OFFSET_CURRENT_PLAYERS: usize = 353;
-const OFFSET_STATE: usize = 354;
-const OFFSET_LAST_ACTION: usize = 360;
-const OFFSET_BUY_IN: usize = 368;
-const OFFSET_PRIZE_POOL: usize = 376;
-const OFFSET_PLAYERS: usize = 384; // After all metadata
+pub const OFFSET_CREATOR: usize = 0;
+pub const OFFSET_MAX_PLAYERS: usize = 32;
+pub const OFFSET_CURRENT_PLAYERS: usize = 33;
+pub const OFFSET_STATE: usize = 34;
+pub const OFFSET_LAST_ACTION: usize = 40;
+pub const OFFSET_BUY_IN: usize = 48;
+pub const OFFSET_PRIZE_POOL: usize = 56;
+pub const OFFSET_PLAYERS: usize = 64;
+ // After all metadata
 
 const PLAYER_SIZE: usize = 72; // 32 (pubkey) + 32 (committed) + 5 (revealed) + 1 (eliminated) + 2 (padding)
 
 fn set_creator(data: &mut [u8], creator: &Pubkey) {
     data[OFFSET_CREATOR..OFFSET_CREATOR + 32].copy_from_slice(creator.as_ref());
-}
-
-fn set_name(data: &mut [u8], name: &[u8]) {
-    let len = name.len().min(64);
-    data[OFFSET_NAME..OFFSET_NAME + len].copy_from_slice(&name[..len]);
-    if len < 64 {
-        data[OFFSET_NAME + len..OFFSET_NAME + 64].fill(0);
-    }
 }
 
 fn get_max_players(data: &[u8]) -> u8 {
@@ -198,16 +188,14 @@ pub fn process_instruction(
 
     match instruction_data[0] {
         0 => {
-            // CreateChallenge: [0] disc, [1..9] buy_in, [9..41] hash, [41] name_len, [42..] name
-            if instruction_data.len() < 42 {
+            // CreateChallenge: [0] disc, [1..9] buy_in, [9..41] hash
+            if instruction_data.len() < 41 {
                 return Err(ProgramError::InvalidInstructionData);
             }
             let buy_in = u64::from_le_bytes(instruction_data[1..9].try_into().unwrap());
             let moves_hash: [u8; 32] = instruction_data[9..41].try_into().unwrap();
-            let name_len = instruction_data[41] as usize;
-            let name = &instruction_data[42..42 + name_len];
             
-            create_challenge(_program_id, accounts, buy_in, moves_hash, name)
+            create_challenge(_program_id, accounts, buy_in, moves_hash)
         }
         1 => {
             // AcceptChallenge: [0] disc, [1..6] moves
@@ -411,7 +399,6 @@ fn create_challenge(
     accounts: &[AccountInfo],
     buy_in_lamports: u64,
     moves_hash: [u8; 32],
-    name: &[u8],
 ) -> ProgramResult {
     let [creator, game_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
         return Err(ProgramError::NotEnoughAccountKeys);
@@ -428,8 +415,8 @@ fn create_challenge(
 
     let mut data = game_account.try_borrow_mut_data()?;
 
+    // Initialize GameAccount
     set_creator(&mut data, creator.key());
-    set_name(&mut data, name);
     set_max_players(&mut data, 2);
     set_state(&mut data, GameState::WaitingForPlayers);
     set_buy_in(&mut data, buy_in_lamports);
@@ -766,3 +753,27 @@ fn transfer_prize(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(not(target_os = "solana"))]
+#[no_mangle]
+/// # Safety
+/// This function is intended for mock testing environments off-chain.
+pub unsafe extern "C" fn sol_memset_(s: *mut u8, c: u8, n: usize) {
+    std::ptr::write_bytes(s, c, n);
+}
+
+#[cfg(not(target_os = "solana"))]
+#[no_mangle]
+/// # Safety
+/// This function is intended for mock testing environments off-chain.
+pub unsafe extern "C" fn sol_memcpy_(dst: *mut u8, src: *const u8, n: usize) {
+    std::ptr::copy_nonoverlapping(src, dst, n);
+}
+
+#[cfg(not(target_os = "solana"))]
+#[no_mangle]
+/// # Safety
+/// This function is intended for mock testing environments off-chain.
+pub unsafe extern "C" fn sol_memmove_(dst: *mut u8, src: *const u8, n: usize) {
+    std::ptr::copy(src, dst, n);
+}

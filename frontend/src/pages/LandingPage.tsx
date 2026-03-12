@@ -138,14 +138,14 @@ export default function LandingPage() {
           title={t('landing.games.rps.title')}
           description={t('landing.games.rps.description')}
           icon={<Swords size={24} />}
-          path="/rps-lobby"
+          path="/lobby"
           color={theme.colors.primary.main}
         />
         <GameCard
           title={t('landing.games.chess.title')}
           description={t('landing.games.chess.description')}
           icon={<Grip size={24} />}
-          path="/idiot-chess-lobby"
+          path="/lobby"
           color={theme.colors.secondary.main}
         />
         <GameCard

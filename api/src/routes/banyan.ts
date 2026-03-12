@@ -1,16 +1,33 @@
 import express from 'express';
 import { connection, programIds, Deserializer, withCache } from '../services/solana';
-
+import { subscriptionManager } from '../services/subscriptionManager';
 
 import { PublicKey } from '@solana/web3.js';
 
 const router = express.Router();
 
+router.get('/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders(); // flush the headers to establish SSE connection
+
+    // Send an initial connected event
+    res.write('data: {"type": "connected"}\n\n');
+
+    // Add this client to the subscription manager
+    subscriptionManager.addClient(res);
+
+    req.on('close', () => {
+        res.end();
+    });
+});
+
 router.get('/manager', async (req, res) => {
     try {
         const manager = await withCache('banyan_manager', 60, async () => {
             const [managerPda] = PublicKey.findProgramAddressSync(
-                [new TextEncoder().encode('manager_v1')],
+                [new TextEncoder().encode('manager_v2')],
                 programIds.banyan
             );
             const info = await connection.getAccountInfo(managerPda);

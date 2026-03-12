@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Clock, AlertCircle } from 'lucide-react';
+import React from 'react';
+import { Clock } from 'lucide-react';
 import { theme } from '../../theme';
 
 interface ChessClockProps {
     whiteTime: number;
     blackTime: number;
     activePlayer: 'white' | 'black' | null;
-    isLive?: boolean;
 }
 
-const ChessClock: React.FC<ChessClockProps> = ({ whiteTime, blackTime, activePlayer, isLive }) => {
+const ChessClock: React.FC<ChessClockProps> = ({ whiteTime, blackTime, activePlayer }) => {
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;

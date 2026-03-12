@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { theme } from '../theme';
+import { generateReadableName } from '../utils/nameGenerator';
 import { Users, Trophy, Coins } from 'lucide-react';
 
 interface GameListItem {
@@ -88,11 +89,11 @@ const RoundDisplay: React.FC<{ currentRound: number; totalRounds: number }> = ({
   />
 );
 
-const WinnerDisplay: React.FC<{ winner: string; prizeAmount: number }> = ({ winner, prizeAmount }) => (
+const WinnerDisplay: React.FC<{ winner: string }> = ({ winner }) => (
   <DataItem
     icon={<Trophy size={12} />}
     label="Winner"
-    value={`${winner.slice(0, 4)}...${winner.slice(-4)}`}
+    value={generateReadableName(winner)}
   />
 );
 
@@ -140,7 +141,7 @@ const GameRow: React.FC<GameRowProps> = ({ game }) => {
             gap: '1.5rem'
           }}>
             <PrizePoolDisplay amount={game.prizePool} />
-            <WinnerDisplay winner={game.winner ?? 'Unknown'} prizeAmount={game.prizePool} />
+            <WinnerDisplay winner={game.winner ?? 'Unknown'} />
           </div>
         ;
 

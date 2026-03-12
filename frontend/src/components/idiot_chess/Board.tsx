@@ -29,10 +29,9 @@ interface BoardProps {
 interface DraggablePieceProps {
     id: string;
     piece: PieceType;
-    isSelected: boolean;
 }
 
-const DraggablePiece: React.FC<DraggablePieceProps> = ({ id, piece, isSelected }) => {
+const DraggablePiece: React.FC<DraggablePieceProps> = ({ id, piece }) => {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: id,
         data: { piece }
@@ -152,7 +151,6 @@ const DroppableSquare: React.FC<DroppableSquareProps> = ({ x, y, children, isBla
 const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled, perspective = 'white' }) => {
     const [selectedPos, setSelectedPos] = useState<Position | null>(null);
     const [validMoves, setValidMoves] = useState<Position[]>([]);
-    const [activeId, setActiveId] = useState<string | null>(null);
     const [activePiece, setActivePiece] = useState<PieceType | null>(null);
 
     const sensors = useSensors(
@@ -214,7 +212,6 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled, perspect
     const handleDragStart = (event: DragStartEvent) => {
         if (disabled || state.turn !== perspective) return;
         const { active } = event;
-        setActiveId(active.id as string);
         setActivePiece(active.data.current?.piece as PieceType);
 
         let foundPos: Position | null = null;
@@ -237,7 +234,6 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled, perspect
     const handleDragEnd = (event: DragEndEvent) => {
         if (disabled || state.turn !== perspective) return;
         const { active, over } = event;
-        setActiveId(null);
         setActivePiece(null);
 
         setSelectedPos(null);
@@ -293,7 +289,6 @@ const Board: React.FC<BoardProps> = ({ engine, state, onMove, disabled, perspect
                     <DraggablePiece
                         id={piece.id}
                         piece={piece}
-                        isSelected={isSelected}
                     />
                 ) : null}
             </DroppableSquare>

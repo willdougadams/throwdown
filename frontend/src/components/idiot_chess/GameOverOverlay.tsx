@@ -1,8 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { theme } from '../../theme';
-import { GameState, Position, IdiotChessEngine, BOARD_SIZE, Piece as PieceType, Player } from './GameEngine';
+import { Player } from './GameEngine';
 
 interface GameOverOverlayProps {
     winner: Player | 'draw' | null;

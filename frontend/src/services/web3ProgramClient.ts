@@ -3,15 +3,13 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
-  TransactionInstruction,
-  Keypair
+  TransactionInstruction
 } from '@solana/web3.js';
 import { getProgramId } from '../config/programIds';
 import { TransactionPacker, AccountSizeCalculator, ChessTransactionPacker } from './transactionPacker';
 
 export interface CreateChallengeParams {
   entryFee: number; // in SOL
-  gameName: string;
   moves: number[];
   salt: bigint;
 }
@@ -29,7 +27,7 @@ export class Web3ProgramClient {
   constructor(connection: Connection, wallet: any, program: 'rps' | 'chess' = 'rps') {
     this.connection = connection;
     this.wallet = wallet;
-    this.programId = getProgramId(program); // Auto-detect network & specified program
+    this.programId = getProgramId(program);
 
     console.log(`[Web3ProgramClient] Initialized for ${program} on ${this.connection.rpcEndpoint} with ID: ${this.programId.toBase58()}`);
   }
@@ -37,12 +35,12 @@ export class Web3ProgramClient {
   // --- Constants for Program Account Offsets ---
   private static readonly OFFSETS = {
     RPS: {
-      BUY_IN_LAMPORTS: 368,
+      BUY_IN_LAMPORTS: 48,
     },
     CHESS: {
-      BUY_IN_LAMPORTS: 112,
-      PLAYER_WHITE_PUBKEY: 136, // Corrected from 144
-      PLAYER_BLACK_PUBKEY: 176, // Corrected from 184
+      BUY_IN_LAMPORTS: 40,
+      PLAYER_WHITE_PUBKEY: 136,
+      PLAYER_BLACK_PUBKEY: 176,
     }
   };
 
@@ -51,44 +49,50 @@ export class Web3ProgramClient {
       throw new Error('Wallet not connected');
     }
 
-    const gameKeypair = Keypair.generate();
-    const gameAccount = gameKeypair.publicKey;
+    const seed = `game_${Date.now()}`;
+    const gameAccount = await PublicKey.createWithSeed(
+      this.wallet.publicKey,
+      seed,
+      this.programId
+    );
 
-    // 1. Hash moves immediately
     const movesHash = TransactionPacker.hashMoves(params.moves as any, params.salt);
     const buyInLamports = BigInt(Math.floor(params.entryFee * 1_000_000_000));
 
-    // 2. Pack CreateChallenge instruction
     const instructionData = TransactionPacker.packCreateChallenge(
       buyInLamports,
-      movesHash,
-      params.gameName
+      movesHash
     );
 
     TransactionPacker.logInstruction('CreateChallenge', instructionData);
 
     const gameSpace = AccountSizeCalculator.calculateGameAccountSize();
+    console.log('[Web3ProgramClient] Creating challenge with seed:', {
+      gameAccount: gameAccount.toBase58(),
+      seed,
+      space: gameSpace,
+      buyIn: params.entryFee
+    });
     const gameRent = await this.connection.getMinimumBalanceForRentExemption(gameSpace);
 
     const instructions = [];
 
-    // Create game account
-    instructions.push(SystemProgram.createAccount({
+    instructions.push(SystemProgram.createAccountWithSeed({
       fromPubkey: this.wallet.publicKey,
       newAccountPubkey: gameAccount,
+      basePubkey: this.wallet.publicKey,
+      seed: seed,
       lamports: gameRent,
       space: gameSpace,
       programId: this.programId,
     }));
 
-    // Transfer buy-in
     instructions.push(SystemProgram.transfer({
       fromPubkey: this.wallet.publicKey,
       toPubkey: gameAccount,
       lamports: Number(buyInLamports),
     }));
 
-    // Challenge instruction
     instructions.push(new TransactionInstruction({
       keys: [
         { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
@@ -106,10 +110,9 @@ export class Web3ProgramClient {
       transaction.feePayer = this.wallet.publicKey;
 
       const signedTransaction = await this.wallet.signTransaction(transaction);
-      signedTransaction.partialSign(gameKeypair);
-
       const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
       await this.connection.confirmTransaction(signature, 'confirmed');
+      console.log('[Web3ProgramClient] Transaction confirmed:', signature);
 
       return {
         gameId: gameAccount.toString(),
@@ -122,7 +125,6 @@ export class Web3ProgramClient {
   }
 
   async joinRPSGame(gameId: string, moves: number[]): Promise<string> {
-    console.log(`[Web3ProgramClient] joinRPSGame called for ${gameId}`);
     return this.acceptChallenge(gameId, moves);
   }
 
@@ -139,15 +141,12 @@ export class Web3ProgramClient {
     const instructionData = TransactionPacker.packAcceptChallenge(moves as any);
 
     const transaction = new Transaction();
-
-    // 1. Transfer buy-in
     transaction.add(SystemProgram.transfer({
       fromPubkey: this.wallet.publicKey,
       toPubkey: gameAccount,
       lamports: Number(buyInLamports),
     }));
 
-    // 2. Accept instruction
     transaction.add(new TransactionInstruction({
       keys: [
         { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
@@ -174,7 +173,6 @@ export class Web3ProgramClient {
     }
 
     const gameAccount = new PublicKey(gameId);
-
     const instructionData = TransactionPacker.packRevealMoves(moves as any, salt);
 
     const revealMovesInstruction = new TransactionInstruction({
@@ -204,7 +202,6 @@ export class Web3ProgramClient {
     }
 
     const gameAccount = new PublicKey(gameId);
-
     const instructionData = TransactionPacker.packClaimPrize();
 
     const claimPrizeInstruction = new TransactionInstruction({
@@ -266,62 +263,70 @@ export class Web3ProgramClient {
 
   // --- Idiot Chess Methods ---
 
-  async createChessChallenge(params: { entryFee: number; gameName: string }): Promise<GameCreationResult> {
+  async createChessChallenge(params: { entryFee: number }): Promise<GameCreationResult> {
     if (!this.wallet.publicKey || !this.wallet.signTransaction) {
       throw new Error('Wallet not connected');
     }
 
     const chessProgramId = getProgramId('chess');
-    const gameKeypair = Keypair.generate();
-    const gameAccount = gameKeypair.publicKey;
-
     const buyInLamports = BigInt(Math.floor(params.entryFee * 1_000_000_000));
-    const chessInstructionData = ChessTransactionPacker.packCreateChallenge(buyInLamports, params.gameName);
 
-    const gameSpace = 272;
-    const gameRent = await this.connection.getMinimumBalanceForRentExemption(gameSpace);
+    const seed = `chess_${Date.now()}`;
+    const gameAccount = await PublicKey.createWithSeed(
+      this.wallet.publicKey,
+      seed,
+      chessProgramId
+    );
 
-    const instructions = [];
-
-    instructions.push(SystemProgram.createAccount({
-      fromPubkey: this.wallet.publicKey,
-      newAccountPubkey: gameAccount,
-      lamports: gameRent,
-      space: gameSpace,
-      programId: chessProgramId,
-    }));
-
-    instructions.push(SystemProgram.transfer({
-      fromPubkey: this.wallet.publicKey,
-      toPubkey: gameAccount,
-      lamports: Number(buyInLamports),
-    }));
-
-    instructions.push(new TransactionInstruction({
-      keys: [
-        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
-        { pubkey: gameAccount, isSigner: false, isWritable: true },
-      ],
-      programId: chessProgramId,
-      data: Buffer.from(chessInstructionData),
-    }));
+    const instructionData = ChessTransactionPacker.packCreateChallenge(
+      buyInLamports
+    );
+    const space = AccountSizeCalculator.calculateChessAccountSize();
+    const rent = await this.connection.getMinimumBalanceForRentExemption(space);
 
     const transaction = new Transaction();
-    instructions.forEach(ix => transaction.add(ix));
+    transaction.add(
+      SystemProgram.createAccountWithSeed({
+        fromPubkey: this.wallet.publicKey,
+        newAccountPubkey: gameAccount,
+        basePubkey: this.wallet.publicKey,
+        seed,
+        lamports: rent,
+        space,
+        programId: chessProgramId
+      })
+    );
+    transaction.add(
+      SystemProgram.transfer({
+        fromPubkey: this.wallet.publicKey,
+        toPubkey: gameAccount,
+        lamports: Number(buyInLamports),
+      })
+    );
+    transaction.add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+          { pubkey: gameAccount, isSigner: false, isWritable: true },
+        ],
+        programId: chessProgramId,
+        data: Buffer.from(instructionData),
+      })
+    );
+
     const { blockhash } = await this.connection.getLatestBlockhash();
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = this.wallet.publicKey;
 
-    const signedTransaction = await this.wallet.signTransaction(transaction);
-    signedTransaction.partialSign(gameKeypair);
-
-    const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
-    await this.connection.confirmTransaction(signature, 'confirmed');
-
-    return {
-      gameId: gameAccount.toString(),
-      signature
-    };
+    try {
+      const signedTransaction = await this.wallet.signTransaction(transaction);
+      const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
+      await this.connection.confirmTransaction(signature, 'confirmed');
+      return { gameId: gameAccount.toString(), signature };
+    } catch (e) {
+      console.error('CreateChessChallenge failed:', e);
+      throw e;
+    }
   }
 
   async acceptChessChallenge(gameId: string): Promise<string> {
@@ -335,7 +340,6 @@ export class Web3ProgramClient {
     const accountInfo = await this.connection.getAccountInfo(gameAccount);
     if (!accountInfo) throw new Error('Game not found');
 
-    // buy_in_lamports is at offset 112 in Chess GameAccount
     const buyInLamports = accountInfo.data.slice(
       Web3ProgramClient.OFFSETS.CHESS.BUY_IN_LAMPORTS,
       Web3ProgramClient.OFFSETS.CHESS.BUY_IN_LAMPORTS + 8
@@ -378,11 +382,9 @@ export class Web3ProgramClient {
     const chessProgramId = getProgramId('chess');
     const gameAccount = new PublicKey(gameId);
 
-    // Fetch game data to get player pubkeys for automatic prize distribution
     const accountInfo = await this.connection.getAccountInfo(gameAccount);
     if (!accountInfo) throw new Error('Game account not found');
 
-    // Player White is at offset 136, Player Black is at offset 176
     const playerWhite = new PublicKey(accountInfo.data.slice(
       Web3ProgramClient.OFFSETS.CHESS.PLAYER_WHITE_PUBKEY,
       Web3ProgramClient.OFFSETS.CHESS.PLAYER_WHITE_PUBKEY + 32
@@ -450,7 +452,6 @@ export class Web3ProgramClient {
   }
 }
 
-// Factory function
 export function createWeb3ProgramClient(connection: Connection, wallet: any, program: 'rps' | 'chess' = 'rps'): Web3ProgramClient {
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet must be connected and have signing capabilities');
