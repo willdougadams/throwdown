@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "watch": "tsc -w"
+    "watch": "tsc -w",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.4"
