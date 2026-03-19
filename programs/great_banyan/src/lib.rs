@@ -82,6 +82,10 @@ pub enum BanyanInstruction {
     DistributeBatchReward {
         bud_count: u8,
     },
+    UpdateTree {
+        fruit_frequency: u64,
+        vitality_required_base: u64,
+    },
 }
 
 // --- Logic ---
@@ -886,6 +890,35 @@ pub fn process_instruction(
         BanyanInstruction::DistributeBatchReward { bud_count: _ } => {
             msg!("Instruction: DistributeBatchReward disabled for security");
             Err(ProgramError::InvalidInstructionData)
+        }
+        BanyanInstruction::UpdateTree { fruit_frequency, vitality_required_base } => {
+            let payer = next_account_info(account_iter)?;
+            let tree_state_info = next_account_info(account_iter)?;
+
+            if !payer.is_signer() {
+                return Err(ProgramError::MissingRequiredSignature);
+            }
+
+            if *tree_state_info.owner() != *program_id {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            let mut tree_state = TreeState::try_from_slice(&tree_state_info.try_borrow_data()?)
+                .map_err(|_| ProgramError::InvalidAccountData)?;
+
+            if tree_state.authority != *payer.key() {
+                msg!("Only the platform authority can update the tree");
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            tree_state.fruit_frequency = fruit_frequency;
+            tree_state.vitality_required_base = vitality_required_base;
+
+            let serialized = borsh::to_vec(&tree_state).map_err(|_| ProgramError::InvalidInstructionData)?;
+            tree_state_info.try_borrow_mut_data()?[..serialized.len()].copy_from_slice(&serialized);
+
+            msg!("Tree updated successfully");
+            Ok(())
         }
     }
 }
