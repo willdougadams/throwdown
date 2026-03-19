@@ -1,7 +1,7 @@
 {
   "buildCommand": "cd frontend && yarn vite build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "yarn install --frozen-lockfile && cd frontend && yarn install --frozen-lockfile && cd ../api && npm install",
+  "installCommand": "npm install && cd frontend && yarn install --frozen-lockfile && cd ../api && npm install",
   "framework": null,
   "build": {
     "env": {
