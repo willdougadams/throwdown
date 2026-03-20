@@ -1,6 +1,7 @@
 const { exec, execWithCapture, rootPath } = require('./utils');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 async function deploy() {
     const program = process.argv[2];
@@ -24,9 +25,9 @@ async function deploy() {
         if (!rpcUrl) {
             rpcUrl = 'http://127.0.0.1:8899';
             if (network === 'devnet') {
-                rpcUrl = 'https://api.devnet.solana.com';
+                rpcUrl = process.env.HELIUS_DEVNET_RPC_URL || 'https://api.devnet.solana.com';
             } else if (network === 'mainnet') {
-                rpcUrl = 'https://api.mainnet-beta.solana.com';
+                rpcUrl = process.env.HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
             }
         }
         console.log(`🌐 Cluster URL: ${rpcUrl}`);
@@ -36,7 +37,7 @@ async function deploy() {
         console.log('🔨 Building program...');
         const programDirName = program === 'banyan' ? 'great_banyan' : (program === 'chess' ? 'idiot_chess' : program);
         const programPath = rootPath('programs', programDirName);
-        await exec('cargo', ['build-sbf', '--', '-Znext-lockfile-bump'], { cwd: programPath });
+        await exec('cargo', ['build-sbf'], { cwd: programPath });
 
         const soFile = path.join(programPath, 'target', 'deploy', `${programDirName.replace(/-/g, '_')}.so`);
 
@@ -65,11 +66,38 @@ async function deploy() {
 
         if (network !== 'localnet' && existingId && existingId !== '11111111111111111111111111111111' && !forceNew) {
             console.log(`📦 Attempting to upgrade existing program: ${existingId}`);
-            console.log(`🔑 Using signer: ${signer}`);
+            console.log(`🔑 Using fee payer: ${signer}`);
             try {
-                await exec('solana', ['program', 'deploy', soFile, '--program-id', existingId, '--keypair', signer]);
-                console.log('✅ Program upgraded successfully!');
-                process.exit(0);
+                if (network === 'mainnet') {
+                    console.log('🔗 Uploading buffer with local wallet (NO Ledger prompts required)...');
+                    const writeRes = execWithCapture('solana', ['program', 'write-buffer', soFile, '--keypair', signer, '--with-compute-unit-price', '100000', '--max-sign-attempts', '1000', '--use-rpc']);
+                    
+                    if (writeRes.status !== 0) {
+                        console.error('❌ Failed to write buffer:', writeRes.stderr || writeRes.stdout);
+                        process.exit(1);
+                    }
+                    
+                    const match = writeRes.stdout.match(/Buffer: ([A-Za-z0-9]+)/);
+                    if (!match || !match[1]) {
+                        console.error('❌ Could not parse Buffer ID from output:\n', writeRes.stdout);
+                        process.exit(1);
+                    }
+                    
+                    const bufferId = match[1];
+                    console.log(`✅ Buffer uploaded securely: ${bufferId}`);
+                    
+                    console.log(`🔗 Handing over buffer authority to your Ledger...`);
+                    await exec('solana', ['program', 'set-buffer-authority', bufferId, '--new-buffer-authority', 'usb://ledger?key=0', '--keypair', signer]);
+                    
+                    console.log(`🔗 Please approve the ONE FINAL upgrade transaction on your Ledger device!`);
+                    await exec('solana', ['program', 'deploy', '--buffer', bufferId, '--program-id', existingId, '--keypair', signer, '--upgrade-authority', 'usb://ledger?key=0']);
+                    console.log('✅ Program upgraded successfully!');
+                    process.exit(0);
+                } else {
+                    await exec('solana', ['program', 'deploy', soFile, '--program-id', existingId, '--keypair', signer]);
+                    console.log('✅ Program upgraded successfully!');
+                    process.exit(0);
+                }
             } catch (err) {
                 if (network === 'mainnet') {
                     console.error('\n❌ Upgrade failed on mainnet!');

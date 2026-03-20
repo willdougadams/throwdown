@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ledger Dashboard</title>
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+</head>
+<body style="font-family: Arial; padding: 50px; background: #111; color: white;">
+  <h2>Banyan Administrative Dashboard</h2>
+  <button id="connectBtn" style="padding: 10px 20px; font-size: 16px;">Connect Phantom (Ledger)</button>
+  <button id="updateBtn" style="padding: 10px 20px; font-size: 16px;" disabled>Approve Mainnet Update</button>
+  <pre id="log" style="background: #222; padding: 20px; margin-top: 20px; border-radius: 8px;"></pre>
+
+  <script>
+    const PROGRAM_ID = new solanaWeb3.PublicKey("8FkJUUZFMkhXkXHqcx3aLxvE54z89JofKJbvoxzKLmGg");
+    const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
+    let wallet = null;
+
+    const log = (msg) => {
+        document.getElementById('log').innerText += msg + "\n";
+        console.log(msg);
+    };
+
+    document.getElementById('connectBtn').onclick = async () => {
+      if (window.solana && window.solana.isPhantom) {
+        try {
+          const resp = await window.solana.connect();
+          wallet = resp.publicKey;
+          log("✅ Wallet Connected: " + wallet.toString());
+          document.getElementById('updateBtn').disabled = false;
+        } catch (err) {
+          log("❌ Error: " + err.message);
+        }
+      } else {
+        alert("Phantom Wallet extension not found!");
+      }
+    };
+
+    document.getElementById('updateBtn').onclick = async () => {
+      try {
+        log("🔄 Fetching Manager State...");
+        const [managerPda] = solanaWeb3.PublicKey.findProgramAddressSync([new TextEncoder().encode("manager_v4")], PROGRAM_ID);
+        const managerInfo = await connection.getAccountInfo(managerPda);
+        if (!managerInfo) {
+            log("❌ Manager PDA not found!");
+            return;
+        }
+        
+        const view = new DataView(managerInfo.data.buffer, managerInfo.data.byteOffset, managerInfo.data.byteLength);
+        const currentEpoch = view.getBigUint64(0, true);
+        log(`🌳 Current Epoch: ${currentEpoch}`);
+
+        const epochBuffer = new Uint8Array(8);
+        new DataView(epochBuffer.buffer).setBigUint64(0, currentEpoch, true); 
+        
+        const [treePda] = solanaWeb3.PublicKey.findProgramAddressSync([new TextEncoder().encode("tree_v4"), epochBuffer], PROGRAM_ID);
+        log(`🌳 Target Tree PDA: ${treePda.toString()}`);
+
+        const data = new Uint8Array(17);
+        data[0] = 5; // Variant 5 (UpdateTree)
+        // 256n (Fruit Frequency)
+        data[1] = 0; data[2] = 1; data[3] = 0; data[4] = 0; data[5] = 0; data[6] = 0; data[7] = 0; data[8] = 0; 
+        // 10n (Vitality Required Base)
+        data[9] = 10; data[10] = 0; data[11] = 0; data[12] = 0; data[13] = 0; data[14] = 0; data[15] = 0; data[16] = 0; 
+
+        log("✍️ Requesting Ledger Signature via Phantom...");
+        const tx = new solanaWeb3.Transaction();
+        tx.add(new solanaWeb3.TransactionInstruction({
+            keys: [
+                { pubkey: new solanaWeb3.PublicKey(wallet.toString()), isSigner: true, isWritable: true },
+                { pubkey: treePda, isSigner: false, isWritable: true },
+            ],
+            programId: PROGRAM_ID,
+            data: data,
+        }));
+
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        tx.feePayer = new solanaWeb3.PublicKey(wallet.toString());
+
+        const { signature } = await window.solana.signAndSendTransaction(tx);
+        log(`✅ Success! Mainnet TX: ${signature}`);
+      } catch(e) {
+          log("❌ Failed: " + e.message);
+      }
+    };
+  </script>
+</body>
+</html>

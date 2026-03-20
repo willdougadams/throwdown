@@ -64,7 +64,7 @@ async function buildProgram(name) {
     // Note: programs/great_banyan and programs/idiot_chess might have different folder names
     // based on original Makefile.
     const programDir = rootPath('programs', name === 'great_banyan' ? 'great_banyan' : (name === 'idiot_chess' ? 'idiot_chess' : name));
-    await exec('cargo', ['build-sbf', '--', '-Znext-lockfile-bump'], { cwd: programDir });
+    await exec('cargo', ['build-sbf'], { cwd: programDir });
 }
 
 async function buildFrontend() {

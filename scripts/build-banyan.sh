@@ -8,7 +8,7 @@ echo "Building Great Banyan Program..."
 
 # Build in programs/great_banyan directory - output goes to programs/great_banyan/target/deploy/
 cd programs/great_banyan
-cargo build-sbf -- -Znext-lockfile-bump
+cargo build-sbf
 
 if [ $? -eq 0 ]; then
     echo "✅ Build successful!"

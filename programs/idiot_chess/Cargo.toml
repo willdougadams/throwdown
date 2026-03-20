@@ -10,8 +10,6 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 bytemuck = { version = "1.14", features = ["derive"] }
 pinocchio = "0.5"
-solana-program = "1.18"
-constant_time_eq = "=0.3.0"
 
 [features]
 no-entrypoint = []

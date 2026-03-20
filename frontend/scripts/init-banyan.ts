@@ -1,6 +1,8 @@
 import { Connection, Keypair, PublicKey, Transaction, SystemProgram, sendAndConfirmTransaction } from '@solana/web3.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { GAME_RULES } from '../src/config/gameRules';
 
 // Load Program ID
@@ -31,9 +33,9 @@ async function main() {
     // Connection
     let rpcUrl = "http://127.0.0.1:8899";
     if (network === 'devnet') {
-        rpcUrl = 'https://devnet.helius-rpc.com/?api-key=adaff95b-72b5-4898-b349-30a3c5a8f244';
+        rpcUrl = process.env.HELIUS_DEVNET_RPC_URL || 'https://api.devnet.solana.com';
     } else if (network === 'mainnet') {
-        rpcUrl = 'https://api.mainnet-beta.solana.com';
+        rpcUrl = process.env.HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
     }
     const connection = new Connection(rpcUrl, "confirmed");
 

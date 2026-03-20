@@ -13,7 +13,6 @@ no-entrypoint = []
 [dependencies]
 pinocchio = "0.5"
 solana-program = { version = "=1.18.26", default-features = false }
-thiserror = { version = "1.0", default-features = false }
 borsh = { version = "1.0", default-features = false }
 bytemuck = { version = "1.14", features = ["derive"] }
 

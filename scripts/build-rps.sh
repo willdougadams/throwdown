@@ -8,7 +8,7 @@ echo "Building RPS Bracket Program..."
 
 # Build in programs/rps directory - output goes to programs/rps/target/deploy/
 cd programs/rps
-cargo build-sbf -- -Znext-lockfile-bump
+cargo build-sbf
 
 if [ $? -eq 0 ]; then
     echo "✅ Build successful!"
