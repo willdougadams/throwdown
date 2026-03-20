@@ -1,4 +1,3 @@
-use borsh::{BorshDeserialize, BorshSerialize};
 use pinocchio::{
     entrypoint,
     instruction::{AccountMeta, Instruction},
@@ -17,7 +16,7 @@ entrypoint!(process_instruction);
 pub type ProgramResult = Result<(), ProgramError>;
 
 #[repr(C)]
-#[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GameManager {
     pub current_epoch: u64,
     pub prize_pool: u64,
@@ -30,11 +29,13 @@ pub struct GameManager {
     pub _padding: [u8; 7],
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct TreeState {
     pub fruit_frequency: u64, // Probability 1/N
     pub authority: [u8; 32],
     pub vitality_required_base: u64,
+    pub nurture_cost: u64,
 }
 
 #[repr(C)]
@@ -62,16 +63,18 @@ pub struct Bud {
 const CRANK_BOUNTY: u64 = 1_000_000; // 0.001 SOL bounty for the cranker
 
 // Fixed size for Bud to avoid realloc complexity in Pinocchio
-const BUD_SIZE: usize = 1024; 
+const BUD_SIZE: usize = 1024;
+
 
 // --- Instruction Definition ---
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(Debug)]
 pub enum BanyanInstruction {
     InitializeGame, // New: Create the singleton GameManager
     InitializeTree {
         fruit_frequency: u64,
         vitality_required_base: u64,
+        nurture_cost: u64,
     },
     NurtureBud {
         nonce: u64,
@@ -85,7 +88,61 @@ pub enum BanyanInstruction {
     UpdateTree {
         fruit_frequency: u64,
         vitality_required_base: u64,
+        nurture_cost: u64,
     },
+}
+
+impl BanyanInstruction {
+    pub fn try_from_slice(data: &[u8]) -> Result<Self, ProgramError> {
+        if data.is_empty() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        match data[0] {
+            0 => Ok(Self::InitializeGame),
+            1 => {
+                if data.len() < 25 {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+                let fruit_frequency = u64::from_le_bytes(data[1..9].try_into().unwrap());
+                let vitality_required_base = u64::from_le_bytes(data[9..17].try_into().unwrap());
+                let nurture_cost = u64::from_le_bytes(data[17..25].try_into().unwrap());
+                Ok(Self::InitializeTree { fruit_frequency, vitality_required_base, nurture_cost })
+            }
+            2 => {
+                if data.len() < 21 {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+                let nonce = u64::from_le_bytes(data[1..9].try_into().unwrap());
+                let mined_slot = u64::from_le_bytes(data[9..17].try_into().unwrap());
+                
+                let string_len = u32::from_le_bytes(data[17..21].try_into().unwrap()) as usize;
+                if data.len() < 21 + string_len {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+                let essence = String::from_utf8(data[21..21+string_len].to_vec())
+                    .map_err(|_| ProgramError::InvalidInstructionData)?;
+                
+                Ok(Self::NurtureBud { nonce, mined_slot, essence })
+            }
+            3 => Ok(Self::DistributeNodeReward),
+            4 => {
+                if data.len() < 2 {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+                Ok(Self::DistributeBatchReward { bud_count: data[1] })
+            }
+            5 => {
+                if data.len() < 25 {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+                let fruit_frequency = u64::from_le_bytes(data[1..9].try_into().unwrap());
+                let vitality_required_base = u64::from_le_bytes(data[9..17].try_into().unwrap());
+                let nurture_cost = u64::from_le_bytes(data[17..25].try_into().unwrap());
+                Ok(Self::UpdateTree { fruit_frequency, vitality_required_base, nurture_cost })
+            }
+            _ => Err(ProgramError::InvalidInstructionData),
+        }
+    }
 }
 
 // --- Logic ---
@@ -96,11 +153,6 @@ pub fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    msg!("ProcessInstruction entry. Data len: {}", instruction_data.len());
-    if !instruction_data.is_empty() {
-        msg!("First byte: {}", instruction_data[0]);
-    }
-
     let instruction = BanyanInstruction::try_from_slice(instruction_data)
         .map_err(|e| {
             msg!("Deserialization failed: {:?}", e);
@@ -111,28 +163,21 @@ pub fn process_instruction(
 
     match instruction {
         BanyanInstruction::InitializeGame => {
-            msg!("Instruction: InitializeGame");
-            msg!("Program ID Bytes: {:?}", *program_id);
             let payer = next_account_info(account_iter)?;
             let manager_info = next_account_info(account_iter)?;
             let manager_authority_info = next_account_info(account_iter)?;
             let system_program = next_account_info(account_iter)?;
-            msg!("Accounts fetched successfully");
 
             if !payer.is_signer() {
                 msg!("Error: Payer is not signer");
                 return Err(ProgramError::MissingRequiredSignature);
             }
-            msg!("Payer is signer");
 
             let seeds: &[&[u8]] = &[b"manager_v4"];
             let (manager_pda, manager_bump) = find_pda(seeds, program_id);
-            msg!("Manager PDA: {:?}, bump: {}", manager_pda, manager_bump);
             if manager_pda != *manager_info.key() {
-                msg!("Error: Invalid seeds for manager PDA. Expected: {:?}, Got: {:?}", manager_pda, manager_info.key());
                 return Err(ProgramError::InvalidSeeds);
             }
-            msg!("Seeds verified");
 
             let manager = GameManager {
                 current_epoch: 0,
@@ -154,14 +199,13 @@ pub fn process_instruction(
                 &[b"manager_v4", &[manager_bump]],
             )?;
 
-            solana_program::msg!("Manager initialized successfully");
-
             Ok(())
         }
 
         BanyanInstruction::InitializeTree {
             fruit_frequency,
             vitality_required_base,
+            nurture_cost,
         } => {
             let payer = next_account_info(account_iter)?;
             let manager_info = next_account_info(account_iter)?;
@@ -174,21 +218,21 @@ pub fn process_instruction(
             if !payer.is_signer() {
                 return Err(ProgramError::MissingRequiredSignature);
             }
-            
+
             // Check owner
             if *manager_info.owner() != *program_id {
                  return Err(ProgramError::InvalidAccountData);
             }
-            
+
             let manager_data = manager_info.try_borrow_data().map_err(|_| ProgramError::InvalidAccountData)?;
-            let manager = GameManager::try_from_slice(&manager_data)
+            let manager = *bytemuck::try_from_bytes::<GameManager>(&manager_data[..std::mem::size_of::<GameManager>()])
                 .map_err(|_| ProgramError::InvalidAccountData)?;
-            
+
             if manager.authority != *payer.key() {
                 msg!("Only the platform authority can initialize new trees");
                 return Err(ProgramError::InvalidAccountData);
             }
-            
+
             // Create TreeState using epoch
             let epoch_bytes = manager.current_epoch.to_le_bytes();
             let tree_seeds: &[&[u8]] = &[b"tree_v4", &epoch_bytes];
@@ -203,15 +247,16 @@ pub fn process_instruction(
                 fruit_frequency,
                 authority: *payer.key(),
                 vitality_required_base,
+                nurture_cost,
             };
-            let tree_data = borsh::to_vec(&tree_state).map_err(|_| ProgramError::InvalidInstructionData)?;
-            
+            let tree_data = bytemuck::bytes_of(&tree_state);
+
             create_account(
                 payer,
                 tree_state_info,
                 system_program,
                 program_id,
-                &tree_data,
+                tree_data,
                 &[b"tree_v4", &epoch_bytes, &[tree_bump]],
             )?;
 
@@ -219,7 +264,6 @@ pub fn process_instruction(
             let bud_seeds: &[&[u8]] = &[b"bud", tree_state_info.key(), b"root"];
             let (bud_pda, bud_bump) = find_pda(bud_seeds, program_id);
              if bud_pda != *root_bud_info.key() {
-                msg!("Root Bud PDA mismatch. Expected: {:?}, Got: {:?}", bud_pda, root_bud_info.key());
                 return Err(ProgramError::InvalidSeeds);
             }
 
@@ -243,11 +287,11 @@ pub fn process_instruction(
                     contribs
                 },
             };
-            
+
             // Probabilistic Fruit for Root
             let bud_hash = keccak::hash(root_bud_info.key());
             let randomness = u64::from_le_bytes(bud_hash.0[0..8].try_into().unwrap());
-            
+
             if randomness % tree_state.fruit_frequency == 0 {
                  root_bud.is_fruit = 1;
             }
@@ -280,7 +324,7 @@ pub fn process_instruction(
             // If not fruit, spawn children
             if root_bud.is_fruit == 0 {
                 let child_depth = 1;
-                
+
                 // Left Child
                 let left_seeds: &[&[u8]] = &[b"bud", root_bud_info.key(), b"left"];
                 let (left_pda, left_bump) = find_pda(left_seeds, program_id);
@@ -301,7 +345,7 @@ pub fn process_instruction(
                     _padding: [0u8; 3],
                     contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
                 };
-                
+
                 create_account_with_space(
                     payer,
                     left_child_info,
@@ -332,7 +376,7 @@ pub fn process_instruction(
                     _padding: [0u8; 3],
                     contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
                 };
-                
+
                 create_account_with_space(
                     payer,
                     right_child_info,
@@ -343,7 +387,7 @@ pub fn process_instruction(
                     &[b"bud", root_bud_info.key(), b"right", &[right_bump]],
                 )?;
             }
-            
+
             Ok(())
         }
 
@@ -352,6 +396,7 @@ pub fn process_instruction(
             let manager_info = next_account_info(account_iter)?; // Send funds here
             let bud_info = next_account_info(account_iter)?;
             let system_program = next_account_info(account_iter)?;
+            let tree_state_info = next_account_info(account_iter)?;
 
              if !nurturer.is_signer() {
                 return Err(ProgramError::MissingRequiredSignature);
@@ -368,11 +413,15 @@ pub fn process_instruction(
                 return Err(ProgramError::InvalidSeeds);
             }
             if *bud_info.owner() != *program_id {
+                msg!("Invalid bud owner");
                 return Err(ProgramError::InvalidAccountData);
             }
 
             // 1. Transfer to Manager
-            let transfer_amount = 600_000;
+            let tree_data = tree_state_info.try_borrow_data()?;
+            let tree_state = *bytemuck::try_from_bytes::<TreeState>(&tree_data[..std::mem::size_of::<TreeState>()])
+                .map_err(|_| ProgramError::InvalidAccountData)?;
+            let transfer_amount = tree_state.nurture_cost;
             invoke_transfer(
                 nurturer,
                 manager_info,
@@ -383,7 +432,8 @@ pub fn process_instruction(
             // Update Manager Prize Pool
             let mut manager = {
                 let data = manager_info.try_borrow_data()?;
-                GameManager::try_from_slice(&data).map_err(|_| ProgramError::InvalidAccountData)?
+                *bytemuck::try_from_bytes::<GameManager>(&data[..std::mem::size_of::<GameManager>()])
+                    .map_err(|_| ProgramError::InvalidAccountData)?
             };
 
             // 1.5 Auto-Sweep Logic
@@ -391,13 +441,13 @@ pub fn process_instruction(
             let rent = Rent::get()?;
             let rent_minimum = rent.minimum_balance(manager_info.data_len());
             let current_balance = *manager_info.try_borrow_lamports()?;
-            
+
             // Calculate what the balance SHOULD be (including the transfer we just did)
             // Note: transfer_amount was already added to manager_info.lamports() by invoke_transfer
             let expected_balance = rent_minimum
                 .saturating_add(manager.prize_pool)
                 .saturating_add(manager.last_fruit_prize);
-            
+
             if current_balance > expected_balance {
                 let surplus = current_balance - expected_balance;
                 if surplus > 0 {
@@ -407,11 +457,11 @@ pub fn process_instruction(
             }
 
             manager.prize_pool = manager.prize_pool.checked_add(transfer_amount).ok_or(ProgramError::ArithmeticOverflow)?;
-            
+
             let data = manager_info.try_borrow_mut_data()?;
             let manager_ptr = data.as_ptr() as *mut GameManager;
             unsafe { *manager_ptr = manager };
-            
+
             // 2. PoW / Vitality Logic
             let clock = Clock::get()?;
             let current_slot = clock.slot;
@@ -420,18 +470,18 @@ pub fn process_instruction(
             if mined_slot > current_slot || current_slot - mined_slot > 300 {
                 return Err(ProgramError::InvalidArgument);
             }
-             
+
             let mut input = Vec::new();
             input.extend_from_slice(essence.as_bytes());
             input.extend_from_slice(bud_info.key());
             input.extend_from_slice(nurturer.key());
-            input.extend_from_slice(&mined_slot.to_le_bytes()); 
+            input.extend_from_slice(&mined_slot.to_le_bytes());
             input.extend_from_slice(&nonce.to_le_bytes());
 
             let hash_result = keccak::hash(&input);
             let h = hash_result.0;
             let vitality_gain = (h[0] % 3) as u64 + 3; // 3..5 range
-            
+
             // Update Bud
             let mut bud = {
                 let data = bud_info.try_borrow_data()?;
@@ -439,7 +489,7 @@ pub fn process_instruction(
             };
 
             bud.vitality_current = bud.vitality_current.saturating_add(vitality_gain);
-            
+
             // Track contributions
             let signer_key = nurturer.key();
             let mut found = false;
@@ -462,52 +512,26 @@ pub fn process_instruction(
 
             // 3. Auto-Bloom Logic
             if bud.vitality_current >= bud.vitality_required && bud.is_bloomed == 0 {
-                // Check for required extra accounts
-                // Expected order: TreeState, LeftChild, RightChild
-                // Note: The iterator has already consumed 4 accounts (nurturer, manager, bud, system_program)
-                // We check if we have enough accounts remaining.
-                
-                // We need at least 3 more accounts (TreeState, Left, Right). 
-                // Currently system_program is at index 3 (0-indexed). 
-                // So if accounts len >= 7, we might have them.
-                
-                // In Pinocchio/Solana, we can try to peek or just consume.
-                // Since this is the end of the instruction, we can just try to get them.
-                
-                // However, failure to provide accounts when bloom is ready should probably just NOT bloom 
-                // rather than failing the transaction, OR fail to enforce the UI to update?
-                // Failing ensures the user knows they need to provide accounts.
-                // But auto-bloom implies it *happens*. If we fail, the nurture is rejected.
-                // Rejection is better because then the UI will retry with the correct accounts.
-                
-                let tree_state_info = next_account_info(account_iter)?;
                 let left_child_info = next_account_info(account_iter)?;
                 let right_child_info = next_account_info(account_iter)?;
-                
+
                 // Fetch next epoch accounts "just in case"
                 let next_tree_state_info = next_account_info(account_iter)?;
                 let next_root_bud_info = next_account_info(account_iter)?;
                 let next_left_child_info = next_account_info(account_iter)?;
                 let next_right_child_info = next_account_info(account_iter)?;
-                
-                let tree_state = TreeState::try_from_slice(&tree_state_info.try_borrow_data()?).map_err(|_| ProgramError::InvalidAccountData)?;
 
                  // Probabilistic Fruit
                 let bud_hash = keccak::hash(bud_info.key());
                 let randomness = u64::from_le_bytes(bud_hash.0[0..8].try_into().unwrap());
-                
+
                 if randomness % tree_state.fruit_frequency == 0 {
                      bud.is_fruit = 1;
                 }
-    
-                bud.is_bloomed = 1;
-                
-                if bud.is_fruit != 0 {
-                    // WIN CONDITION - Snapshot for Batched Payout
-                    // We no longer pay out immediately here. 
-                    // Instead, we snapshot the prize pool and let the bot/users
-                    // trigger DistributeNodeReward for each node in the winning branch.
 
+                bud.is_bloomed = 1;
+
+                if bud.is_fruit != 0 {
                     // Snapshot the win
                     manager.last_fruit_bud = *bud_info.key();
                     manager.last_fruit_prize = manager.prize_pool;
@@ -517,12 +541,12 @@ pub fn process_instruction(
 
                     manager.prize_pool = 0; // Reset for next epoch
                     manager.current_epoch += 1;
-                    
+
                     // ==========================================
                     // AUTO INITIALIZE NEXT EPOCH
                     // ==========================================
                     let epoch_bytes = manager.current_epoch.to_le_bytes();
-                    
+
                     // 1. Next Tree State
                     let tree_seeds: &[&[u8]] = &[b"tree_v4", &epoch_bytes];
                     let (tree_pda, tree_bump) = find_pda(tree_seeds, program_id);
@@ -536,15 +560,16 @@ pub fn process_instruction(
                         fruit_frequency: tree_state.fruit_frequency,
                         authority: manager.authority,
                         vitality_required_base: tree_state.vitality_required_base,
+                        nurture_cost: tree_state.nurture_cost,
                     };
-                    let tree_data = borsh::to_vec(&next_tree_state).map_err(|_| ProgramError::InvalidInstructionData)?;
-                    
+                    let tree_data = bytemuck::bytes_of(&next_tree_state);
+
                     create_account(
                         nurturer, // The player pays for the initialization
                         next_tree_state_info,
                         system_program,
                         program_id,
-                        &tree_data,
+                        tree_data,
                         &[b"tree_v4", &epoch_bytes, &[tree_bump]],
                     )?;
 
@@ -579,7 +604,7 @@ pub fn process_instruction(
                     // Probabilistic Fruit for Root
                     let next_bud_hash = keccak::hash(next_root_bud_info.key());
                     let randomness = u64::from_le_bytes(next_bud_hash.0[0..8].try_into().unwrap());
-                    
+
                     if randomness % next_tree_state.fruit_frequency == 0 {
                          next_root_bud.is_fruit = 1;
                     }
@@ -609,7 +634,7 @@ pub fn process_instruction(
                     // 3. Spawning the Left/Right children of the Next Root if not fruit
                     if next_root_bud.is_fruit == 0 {
                         let child_depth = 1;
-                        
+
                         // Left Child
                         let left_seeds: &[&[u8]] = &[b"bud", next_root_bud_info.key(), b"left"];
                         let (left_pda, left_bump) = find_pda(left_seeds, program_id);
@@ -629,7 +654,7 @@ pub fn process_instruction(
                             _padding: [0u8; 3],
                             contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
                         };
-                        
+
                         create_account_with_space(
                             nurturer, // The player pays for the initialization
                             next_left_child_info,
@@ -659,7 +684,7 @@ pub fn process_instruction(
                             _padding: [0u8; 3],
                             contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
                         };
-                        
+
                         create_account_with_space(
                             nurturer, // The player pays for the initialization
                             next_right_child_info,
@@ -670,22 +695,22 @@ pub fn process_instruction(
                             &[b"bud", next_root_bud_info.key(), b"right", &[right_bump]],
                         )?;
                     }
-                    
+
                     // Setup Save
-                    let serialized_manager = borsh::to_vec(&manager).map_err(|_| ProgramError::InvalidInstructionData)?;
-                    manager_info.try_borrow_mut_data()?[..serialized_manager.len()].copy_from_slice(&serialized_manager);
-    
+                    let serialized_manager = bytemuck::bytes_of(&manager);
+                    manager_info.try_borrow_mut_data()?[..serialized_manager.len()].copy_from_slice(serialized_manager);
+
                 } else {
                     // Initialize Children
                     let child_depth = bud.depth + 1;
-                    
+
                     // Left Child
                     let left_seeds: &[&[u8]] = &[b"bud", bud_info.key(), b"left"];
                     let (left_pda, left_bump) = find_pda(left_seeds, program_id);
                     if left_pda != *left_child_info.key() {
                         return Err(ProgramError::InvalidSeeds);
                     }
-    
+
                     if left_child_info.data_len() == 0 {
                         msg!("Creating left child...");
                         let left_child = Bud {
@@ -700,7 +725,7 @@ pub fn process_instruction(
                             _padding: [0u8; 3],
                             contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
                         };
-                        
+
                         create_account_with_space(
                             nurturer, // Payer is nurturer
                             left_child_info,
@@ -713,14 +738,14 @@ pub fn process_instruction(
                     } else {
                         msg!("Left child already exists, skipping creation");
                     }
-    
+
                     // Right Child
                     let right_seeds: &[&[u8]] = &[b"bud", bud_info.key(), b"right"];
                     let (right_pda, right_bump) = find_pda(right_seeds, program_id);
                     if right_pda != *right_child_info.key() {
                         return Err(ProgramError::InvalidSeeds);
                     }
-    
+
                     if right_child_info.data_len() == 0 {
                         msg!("Creating right child...");
                         let right_child = Bud {
@@ -735,7 +760,7 @@ pub fn process_instruction(
                             _padding: [0u8; 3],
                             contributions: [Contribution { key: [0u8; 32], vitality: 0 }; 10],
                         };
-                        
+
                         create_account_with_space(
                             nurturer,
                             right_child_info,
@@ -750,7 +775,7 @@ pub fn process_instruction(
                     }
                 }
             }
-            
+
             let new_data = bytemuck::bytes_of(&bud);
             bud_info.try_borrow_mut_data()?[..new_data.len()].copy_from_slice(new_data);
 
@@ -760,7 +785,7 @@ pub fn process_instruction(
             let nurturer = next_account_info(account_iter)?; // Triggerer (signer)
             let manager_info = next_account_info(account_iter)?;
             let bud_info = next_account_info(account_iter)?;
-            
+
             if !nurturer.is_signer() {
                 return Err(ProgramError::MissingRequiredSignature);
             }
@@ -776,9 +801,10 @@ pub fn process_instruction(
                 return Err(ProgramError::InvalidSeeds);
             }
 
-            let manager = GameManager::try_from_slice(&manager_info.try_borrow_data()?)
+            let manager_data = manager_info.try_borrow_data()?;
+            let manager = *bytemuck::try_from_bytes::<GameManager>(&manager_data[..std::mem::size_of::<GameManager>()])
                 .map_err(|_| ProgramError::InvalidAccountData)?;
-            
+
             let mut bud = {
                 let data = bud_info.try_borrow_data()?;
                 *bytemuck::from_bytes::<Bud>(&data[..std::mem::size_of::<Bud>()])
@@ -829,7 +855,7 @@ pub fn process_instruction(
             };
 
             let total_node_share = node_even_share + node_expo_share;
-            
+
             // Safety check: Cannot distribute more than remaining
             let total_node_share = if total_node_share > manager.last_fruit_prize {
                 manager.last_fruit_prize
@@ -837,11 +863,11 @@ pub fn process_instruction(
                 total_node_share
             };
 
-            
+
             // 5. Pay the Cranker (Bounty)
             let bounty = if total_node_share > CRANK_BOUNTY { CRANK_BOUNTY } else { total_node_share };
             let actual_dist_share = total_node_share.saturating_sub(bounty);
-            
+
             if bounty > 0 {
                 *manager_info.try_borrow_mut_lamports()? -= bounty;
                 *nurturer.try_borrow_mut_lamports()? += bounty;
@@ -862,7 +888,7 @@ pub fn process_instruction(
                     if contribution.vitality == 0 { continue; }
 
                     let share = (actual_dist_share * contribution.vitality) / bud.vitality_current;
-                    
+
                     if let Some(contributor_info) = account_iter.next() {
                         if *contributor_info.key() == contribution.key {
                             if share > 0 {
@@ -891,7 +917,7 @@ pub fn process_instruction(
             msg!("Instruction: DistributeBatchReward disabled for security");
             Err(ProgramError::InvalidInstructionData)
         }
-        BanyanInstruction::UpdateTree { fruit_frequency, vitality_required_base } => {
+        BanyanInstruction::UpdateTree { fruit_frequency, vitality_required_base, nurture_cost } => {
             let payer = next_account_info(account_iter)?;
             let tree_state_info = next_account_info(account_iter)?;
 
@@ -903,7 +929,8 @@ pub fn process_instruction(
                 return Err(ProgramError::InvalidAccountData);
             }
 
-            let mut tree_state = TreeState::try_from_slice(&tree_state_info.try_borrow_data()?)
+            let tree_data = tree_state_info.try_borrow_data()?;
+            let mut tree_state = *bytemuck::try_from_bytes::<TreeState>(&tree_data[..std::mem::size_of::<TreeState>()])
                 .map_err(|_| ProgramError::InvalidAccountData)?;
 
             if tree_state.authority != *payer.key() {
@@ -913,9 +940,10 @@ pub fn process_instruction(
 
             tree_state.fruit_frequency = fruit_frequency;
             tree_state.vitality_required_base = vitality_required_base;
+            tree_state.nurture_cost = nurture_cost;
 
-            let serialized = borsh::to_vec(&tree_state).map_err(|_| ProgramError::InvalidInstructionData)?;
-            tree_state_info.try_borrow_mut_data()?[..serialized.len()].copy_from_slice(&serialized);
+            let serialized = bytemuck::bytes_of(&tree_state);
+            tree_state_info.try_borrow_mut_data()?[..serialized.len()].copy_from_slice(serialized);
 
             msg!("Tree updated successfully");
             Ok(())
@@ -977,7 +1005,7 @@ fn create_account_with_space(
         accounts: &metas,
         data: &buf,
     };
-    
+
     // Use native pinocchio invoke_signed
     let seeds_vec: Vec<pinocchio::instruction::Seed> = seeds
         .iter()
@@ -990,10 +1018,10 @@ fn create_account_with_space(
         &[payer, new_account],
         &[signer],
     )?;
-    
+
     let mut account_data = new_account.try_borrow_mut_data()?;
     account_data[..init_data.len()].copy_from_slice(init_data);
-    
+
     Ok(())
 }
 
@@ -1009,7 +1037,7 @@ fn invoke_transfer(
     ];
 
     let mut buf = Vec::with_capacity(4 + 8);
-    buf.extend_from_slice(&2u32.to_le_bytes()); 
+    buf.extend_from_slice(&2u32.to_le_bytes());
     buf.extend_from_slice(&lamports.to_le_bytes());
 
      let ix = Instruction {
@@ -1017,7 +1045,7 @@ fn invoke_transfer(
         accounts: &metas,
         data: &buf,
     };
-    
+
     pinocchio::program::invoke(
         &ix,
         &[from, to],
@@ -1058,7 +1086,7 @@ mod tests {
         unsafe {
             // Pinocchio AccountInfo is basically a wrapper around a single memory index or pointer depending on version.
             // In >0.6.x it targets a 64-bit raw layout pointer mapping under testing/SVM.
-            
+
             // To pass life checks via standard mocked pointer addresses:
             let raw_addr = key as *const _ as u64;
             std::mem::transmute::<[u64; 1], AccountInfo>([raw_addr])
@@ -1083,19 +1111,19 @@ mod tests {
         let mut system_data = [0u8; 0];
         let system_acc = mock_account(&system_program_key, &system_program_key, &mut system_lamports, &mut system_data, false, false);
 
-        // We need a second mutable reference to payer_lamports and payer_data, but for a mock, we can just 
-        // create a new mock account block for the second payer instance using dummy values because the life-check 
-        // only strictly parses the entrypoint. 
+        // We need a second mutable reference to payer_lamports and payer_data, but for a mock, we can just
+        // create a new mock account block for the second payer instance using dummy values because the life-check
+        // only strictly parses the entrypoint.
         let mut payer_lamports_2 = 1000000000u64;
         let mut payer_data_2 = [0u8; 0];
         let payer_acc_2 = mock_account(&payer_key, &payer_key, &mut payer_lamports_2, &mut payer_data_2, true, true);
 
         let accounts = vec![payer_acc, manager_acc, payer_acc_2, system_acc];
-        let instruction_data = borsh::to_vec(&BanyanInstruction::InitializeGame).unwrap();
+        let instruction_data = vec![0u8];
 
         // This will likely fail due to PDA check in lib.rs, but it verifies the entrypoint.
         let result = process_instruction(&program_id, &accounts, &instruction_data);
         // We expect an error because PDA won't match our mock manager_key, but that's fine for life-check.
-        assert!(result.is_err()); 
+        assert!(result.is_err());
     }
 }

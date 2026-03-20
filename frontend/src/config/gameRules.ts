@@ -7,5 +7,5 @@ export const GAME_RULES = {
     VITALITY_REQUIRED_BASE: 10n,
 
     // Cost in lamports to nurture a bud (sent to prize pool)
-    NURTURE_COST_LAMPORTS: 600_000_000,
+    NURTURE_COST_LAMPORTS: 10_000_000,
 };

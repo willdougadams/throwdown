@@ -152,6 +152,7 @@ pub fn process_instruction(
             )
         }
         3 => distribute_prize(_program_id, accounts),
+        4 => cancel_challenge(_program_id, accounts),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -397,66 +398,6 @@ fn make_move(
         }
     }
 
-    // Auto-distribute prize if game finished (except timeout which is claimed)
-    if game.winner != Winner::None {
-        let prize = game.prize_pool;
-        if game.winner == Winner::Draw {
-            let half_prize = prize / 2;
-            
-            // White refund
-            {
-                let white_acc = &accounts[2];
-                if white_acc.key() == &game.players[0].pubkey {
-                    let mut white_lamports = white_acc.try_borrow_mut_lamports()?;
-                    let mut game_lamports = game_account.try_borrow_mut_lamports()?;
-                    *game_lamports = game_lamports.checked_sub(half_prize).ok_or(ProgramError::InsufficientFunds)?;
-                    *white_lamports = white_lamports.checked_add(half_prize).ok_or(ProgramError::InvalidAccountData)?;
-                }
-            }
-            
-            // Black refund
-            {
-                let black_acc = &accounts[3];
-                if black_acc.key() == &game.players[1].pubkey {
-                    let mut black_lamports = black_acc.try_borrow_mut_lamports()?;
-                    let mut game_lamports = game_account.try_borrow_mut_lamports()?;
-                    *game_lamports = game_lamports.checked_sub(half_prize).ok_or(ProgramError::InsufficientFunds)?;
-                    *black_lamports = black_lamports.checked_add(half_prize).ok_or(ProgramError::InvalidAccountData)?;
-                }
-            }
-            msg!("Draw! Prizes refunded.");
-        } else {
-            // Winner payout
-            let winner_idx = if game.winner == Winner::White { 0 } else { 1 };
-            let winner_acc = if game.winner == Winner::White { &accounts[2] } else { &accounts[3] };
-            let manager_acc = &accounts[4];
-            
-            if winner_acc.key() == &game.players[winner_idx].pubkey {
-                let prize = game.prize_pool;
-                let platform_fee = prize / 100;
-                let payout = prize.saturating_sub(platform_fee);
-
-                let mut winner_lamports = winner_acc.try_borrow_mut_lamports()?;
-                let mut game_lamports = game_account.try_borrow_mut_lamports()?;
-                
-                // Transfer payout to winner
-                *game_lamports = game_lamports.checked_sub(payout).ok_or(ProgramError::InsufficientFunds)?;
-                *winner_lamports = winner_lamports.checked_add(payout).ok_or(ProgramError::InvalidAccountData)?;
-
-                // Transfer fee to treasury
-                if platform_fee > 0 {
-                    let mut manager_lamports = manager_acc.try_borrow_mut_lamports()?;
-                    *game_lamports = game_lamports.checked_sub(platform_fee).ok_or(ProgramError::InsufficientFunds)?;
-                    *manager_lamports = manager_lamports.checked_add(platform_fee).ok_or(ProgramError::InvalidAccountData)?;
-                    msg!("Platform fee of {} kept in treasury", platform_fee);
-                }
-
-                game.players[winner_idx].eliminated = 1; // Mark as paid
-                msg!("Winner paid automatically!");
-            }
-        }
-    }
-
     game.last_action_timestamp = now;
 
     Ok(())
@@ -574,8 +515,27 @@ pub fn distribute_prize(program_id: &Pubkey, accounts: &[AccountInfo]) -> Progra
     }
 
     if game.winner == Winner::Draw {
-        // Refund both? For now, just implement winner claim.
-        return Err(ProgramError::InvalidInstructionData);
+        let player_idx = if game.players[0].pubkey == *winner_acc.key() {
+            0
+        } else if game.players[1].pubkey == *winner_acc.key() {
+            1
+        } else {
+            return Err(ProgramError::InvalidAccountData);
+        };
+
+        if game.players[player_idx].eliminated != 0 {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        game.players[player_idx].eliminated = 1;
+        let payout = game.buy_in_lamports;
+        
+        let mut winner_lamports = winner_acc.try_borrow_mut_lamports()?;
+        let mut game_lamports = game_account.try_borrow_mut_lamports()?;
+        *game_lamports = game_lamports.checked_sub(payout).ok_or(ProgramError::InsufficientFunds)?;
+        *winner_lamports = winner_lamports.checked_add(payout).ok_or(ProgramError::InvalidAccountData)?;
+        msg!("Draw prize claimed!");
+        return Ok(());
     }
 
     let winner_player = if game.winner == Winner::White { Player::White } else { Player::Black };
@@ -612,6 +572,49 @@ pub fn distribute_prize(program_id: &Pubkey, accounts: &[AccountInfo]) -> Progra
     }
 
     msg!("Prize claimed!");
+    Ok(())
+}
+
+fn cancel_challenge(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    let [creator, game_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    };
+
+    if !creator.is_signer() {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    let mut data = game_account.try_borrow_mut_data()?;
+    let game = get_game_mut(&mut data);
+
+    if game.players[1].pubkey != Pubkey::default() {
+        msg!("Challenge already accepted.");
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    if game.players[0].pubkey != *creator.key() {
+        msg!("Only the creator can cancel an unaccepted challenge.");
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let buy_in = game.buy_in_lamports;
+    game.winner = Winner::Draw; 
+    game.players[0].eliminated = 1;
+
+    let mut creator_lamports = creator.try_borrow_mut_lamports()?;
+    let mut game_lamports = game_account.try_borrow_mut_lamports()?;
+
+    let rent_exempt_minimum = 1_000u64;
+    let available_balance = game_lamports.checked_sub(rent_exempt_minimum).unwrap_or(0);
+    let transfer_amount = buy_in.min(available_balance);
+
+    *game_lamports = game_lamports.checked_sub(transfer_amount).ok_or(ProgramError::InsufficientFunds)?;
+    *creator_lamports = creator_lamports.checked_add(transfer_amount).ok_or(ProgramError::InvalidAccountData)?;
+
+    msg!("Challenge manually cancelled by creator: {:?}", creator.key());
     Ok(())
 }
 

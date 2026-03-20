@@ -133,7 +133,8 @@ export default function GamePage() {
         state: mapBlockchainStateToUI(gameDetails.state),
         maxPlayers: gameDetails.max_players ?? 2,
         players,
-        winner
+        winner,
+        creator: gameDetails.creator?.toString()
       };
 
       console.log('Converted game data:', convertedGameData);
@@ -324,6 +325,24 @@ export default function GamePage() {
     }
   };
 
+  const handleCancelChallenge = async () => {
+    if (!publicKey || !gameId) {
+      showToast('Wallet not connected', 'error');
+      return;
+    }
+
+    const toastId = showToast('Cancelling challenge...', 'loading');
+    try {
+      const programClient = createWeb3ProgramClient(connection, wallet, 'rps');
+      await programClient.cancelChallenge(gameId);
+      updateToast(toastId, 'Challenge cancelled successfully', 'success');
+      await fetchGameData();
+    } catch (error: any) {
+      console.error('Error cancelling challenge:', error);
+      updateToast(toastId, `Failed to cancel: ${error?.message || 'Unknown error'}`, 'error');
+    }
+  };
+
   const handleMoveSelect = (index: number, move: Move) => {
     const newMoves = [...selectedMoves];
     newMoves[index] = move;
@@ -408,7 +427,25 @@ export default function GamePage() {
         padding: '1rem',
         marginBottom: '1rem'
       }}>
-        <h1 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('rps.game.matchup_title')}</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1 style={{ color: theme.colors.text.primary, margin: 0 }}>{t('rps.game.matchup_title')}</h1>
+          {gameData.state === 'waiting' && gameData.creator === publicKey?.toString() && (
+            <button
+              onClick={handleCancelChallenge}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: theme.colors.error,
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              Cancel Challenge
+            </button>
+          )}
+        </div>
         {gameData.maxPlayers === 2 && gameData.state === 'in_progress' && (() => {
           const now = Math.floor(Date.now() / 1000);
           const deadline = lastActionTimestamp + 90;

@@ -142,6 +142,23 @@ const IdiotChessPage: React.FC<IdiotChessPageProps> = ({ gameId: propGameId, mod
         }
     };
 
+    const handleCancelChallenge = async () => {
+        if (!isLive || !gameId || !connected) return;
+        setIsSubmitting(true);
+        const toastId = showToast('Cancelling challenge...', 'loading');
+        try {
+            const client = createWeb3ProgramClient(connection, wallet, 'chess');
+            await client.cancelChessChallenge(gameId as string);
+            updateToast(toastId, 'Challenge cancelled successfully', 'success');
+            refreshOnChain();
+        } catch (e: any) {
+            console.error(e);
+            updateToast(toastId, e.message || 'Failed to cancel challenge', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     // Computer Player Logic (Practice Mode Only)
     useEffect(() => {
         if (!isLive && gameState.turn === 'black' && !gameState.winner) {
@@ -256,6 +273,24 @@ const IdiotChessPage: React.FC<IdiotChessPageProps> = ({ gameId: propGameId, mod
                         >
                             <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
                         </button>
+                        
+                        {onChainData && onChainData.state === 'WaitingForPlayers' && onChainData.creator === publicKey?.toString() && (
+                            <button
+                                onClick={handleCancelChallenge}
+                                disabled={isSubmitting}
+                                style={{
+                                    padding: '0.6rem 1.5rem',
+                                    backgroundColor: theme.colors.error,
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancel Challenge
+                            </button>
+                        )}
                         {((gameState.winner) || (isLive && onChainData && !isMyTurn() && (
                             (gameState.turn === 'white' && gameState.whiteTimeSeconds <= 0) ||
                             (gameState.turn === 'black' && gameState.blackTimeSeconds <= 0)

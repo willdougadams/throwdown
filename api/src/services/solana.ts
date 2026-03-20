@@ -3,9 +3,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const HELIUS_RPC_URL = process.env.HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
+const network = process.env.NETWORK || 'devnet';
+let rpcUrl = process.env.RPC_URL;
 
-export const connection = new Connection(HELIUS_RPC_URL, 'confirmed');
+if (rpcUrl && network === 'devnet') {
+    rpcUrl = rpcUrl.replace('mainnet', 'devnet');
+}
+if (!rpcUrl) {
+    rpcUrl = network === 'mainnet-beta' ? 'https://api.mainnet-beta.solana.com' : 'https://api.devnet.solana.com';
+}
+
+export const connection = new Connection(rpcUrl, 'confirmed');
 
 import { GameAccountDeserializer, ChessGameAccountDeserializer } from '@throwdown/shared';
 
@@ -14,7 +22,6 @@ import path from 'path';
 import rawProgramIdsJson from '../../../scripts/program-ids.json';
 const rawProgramIds: any = rawProgramIdsJson;
 
-const network = process.env.NETWORK || 'mainnet';
 const networkKey = network === 'mainnet-beta' ? 'mainnet' : network;
 const networkProgramIds = rawProgramIds[networkKey] || rawProgramIds.mainnet || rawProgramIds.devnet || {};
 

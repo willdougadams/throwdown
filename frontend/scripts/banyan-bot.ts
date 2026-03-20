@@ -189,6 +189,7 @@ async function main() {
         console.log(`🌱 Initializing Tree for epoch ${epoch}...`);
         const fruitFreq = GAME_RULES.FRUIT_FREQUENCY;
         const vitalityReqBase = GAME_RULES.VITALITY_REQUIRED_BASE;
+        const nurtureCost = BigInt(GAME_RULES.NURTURE_COST_LAMPORTS);
 
         const [treePda] = findTreePda(epoch);
         const [rootBudPda] = findBudPda(treePda, 'root');
@@ -196,10 +197,11 @@ async function main() {
         const [rightPda] = findChildBudPda(rootBudPda, 'right');
         const [managerPda] = findGameManagerPda();
 
-        const data = Buffer.alloc(1 + 8 + 8);
+        const data = Buffer.alloc(1 + 8 + 8 + 8);
         data.writeUInt8(1, 0); // InitializeTree
         data.writeBigUInt64LE(fruitFreq, 1);
         data.writeBigUInt64LE(vitalityReqBase, 9);
+        data.writeBigUInt64LE(nurtureCost, 17);
 
         const tx = new Transaction().add({
             keys: [

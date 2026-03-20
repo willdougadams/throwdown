@@ -155,14 +155,17 @@ async function main() {
 
     const fruitFreq = GAME_RULES.FRUIT_FREQUENCY;
     const vitalityReq = GAME_RULES.VITALITY_REQUIRED_BASE;
+    const nurtureCost = BigInt(GAME_RULES.NURTURE_COST_LAMPORTS);
 
-    const data = Buffer.alloc(1 + 8 + 8);
+    const data = Buffer.alloc(1 + 8 + 8 + 8);
     let offset = 0;
     data.writeUInt8(1, offset); // Variant 1
     offset += 1;
     data.writeBigUInt64LE(fruitFreq, offset);
     offset += 8;
     data.writeBigUInt64LE(vitalityReq, offset);
+    offset += 8;
+    data.writeBigUInt64LE(nurtureCost, offset);
 
     // Accounts for InitializeTree:
     // Payer, Manager, TreeState, RootBud, LeftChild, RightChild, SystemProgram

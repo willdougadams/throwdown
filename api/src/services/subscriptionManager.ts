@@ -6,12 +6,15 @@ import { Response } from 'express';
 export type BanyanEvent = 
     | { type: 'manager', data: any }
     | { type: 'tree', epoch: string, data: any, address: string }
-    | { type: 'bud', address: string, data: any };
+    | { type: 'bud', address: string, data: any }
+    | { type: 'game_update', gameType: 'rps' | 'chess', data: any };
 
 class SubscriptionManager {
     private isListening = false;
     private clients: Set<Response> = new Set();
-    private subscriptionId: number | null = null;
+    private banyanSubscriptionId: number | null = null;
+    private rpsSubscriptionId: number | null = null;
+    private chessSubscriptionId: number | null = null;
     
     // Quick cache of discriminators from Deserializer context if possible, 
     // but easier to try deserializing and seeing what works based on data size or discriminator
@@ -21,20 +24,47 @@ class SubscriptionManager {
         if (this.isListening) return;
         
         console.log(`[SubscriptionManager] Starting Banyan program subscription on ${programIds.banyan.toBase58()}...`);
-        this.subscriptionId = connection.onProgramAccountChange(
+        this.banyanSubscriptionId = connection.onProgramAccountChange(
             programIds.banyan,
             (updatedAccountInfo, context) => {
                 this.handleAccountUpdate(updatedAccountInfo.accountId, updatedAccountInfo.accountInfo.data);
             },
             'confirmed'
         );
+
+        console.log(`[SubscriptionManager] Starting RPS program subscription on ${programIds.rps.toBase58()}...`);
+        this.rpsSubscriptionId = connection.onProgramAccountChange(
+            programIds.rps,
+            (updatedAccountInfo, context) => {
+                this.handleGameUpdate('rps', updatedAccountInfo.accountId, updatedAccountInfo.accountInfo.data);
+            },
+            'confirmed'
+        );
+
+        console.log(`[SubscriptionManager] Starting Chess program subscription on ${programIds.chess.toBase58()}...`);
+        this.chessSubscriptionId = connection.onProgramAccountChange(
+            programIds.chess,
+            (updatedAccountInfo, context) => {
+                this.handleGameUpdate('chess', updatedAccountInfo.accountId, updatedAccountInfo.accountInfo.data);
+            },
+            'confirmed'
+        );
+
         this.isListening = true;
     }
 
     public stopListening() {
-        if (this.subscriptionId !== null) {
-            connection.removeProgramAccountChangeListener(this.subscriptionId);
-            this.subscriptionId = null;
+        if (this.banyanSubscriptionId !== null) {
+            connection.removeProgramAccountChangeListener(this.banyanSubscriptionId);
+            this.banyanSubscriptionId = null;
+        }
+        if (this.rpsSubscriptionId !== null) {
+            connection.removeProgramAccountChangeListener(this.rpsSubscriptionId);
+            this.rpsSubscriptionId = null;
+        }
+        if (this.chessSubscriptionId !== null) {
+            connection.removeProgramAccountChangeListener(this.chessSubscriptionId);
+            this.chessSubscriptionId = null;
         }
         this.isListening = false;
         
@@ -58,6 +88,24 @@ class SubscriptionManager {
         const message = `data: ${JSON.stringify(event)}\n\n`;
         for (const client of this.clients) {
             client.write(message);
+        }
+    }
+
+    private handleGameUpdate(type: 'rps' | 'chess', accountId: PublicKey, data: Buffer) {
+        try {
+            const gameData = type === 'chess' 
+                ? Deserializer.deserializeChessGame(data, accountId.toBase58())
+                : Deserializer.deserializeRPSGame(data, accountId.toBase58());
+
+            if (gameData) {
+                this.broadcast({
+                    type: 'game_update',
+                    gameType: type,
+                    data: gameData
+                });
+            }
+        } catch (error) {
+            console.error(`[SubscriptionManager] Failed to process ${type} update for ${accountId.toBase58()}`, error);
         }
     }
 

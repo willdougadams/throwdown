@@ -15,15 +15,15 @@ const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
     const endpoint = useMemo(() => {
         // Return appropriate RPC endpoint based on selected network
-        let ep = import.meta.env.VITE_HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
+        let ep = 'https://api.mainnet-beta.solana.com';
         if (network === 'localnet') {
             ep = 'http://127.0.0.1:8899';
         } else if (network === 'devnet') {
             ep = clusterApiUrl(WalletAdapterNetwork.Devnet);
         } else if (network === 'mainnet-beta') {
-            ep = import.meta.env.VITE_HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
+            ep = 'https://api.mainnet-beta.solana.com';
         } else if (network === 'custom') {
-            ep = customRpcUrl || import.meta.env.VITE_HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
+            ep = customRpcUrl || 'https://api.mainnet-beta.solana.com';
         }
         console.log(`[WalletProvider] Network: ${network}, Endpoint: ${ep}`);
         return ep;

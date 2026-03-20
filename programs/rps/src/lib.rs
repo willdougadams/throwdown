@@ -171,6 +171,7 @@ pub enum GameInstruction {
         salt: u64,
     },
     DistributePrize,
+    CancelChallenge,
 }
 
 // ============================================================================
@@ -241,6 +242,7 @@ pub fn process_instruction(
             reveal_moves(_program_id, accounts, moves, salt)
         }
         3 => distribute_prize(_program_id, accounts),
+        4 => cancel_challenge(_program_id, accounts),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -539,6 +541,37 @@ fn reveal_moves(program_id: &Pubkey, accounts: &[AccountInfo], moves: [Move; 5],
     set_state(&mut data, GameState::Finished);
     msg!("Match resolved successfully.");
     Ok(())
+}
+
+fn cancel_challenge(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    let [creator, game_account] = accounts.get(..2).ok_or(ProgramError::NotEnoughAccountKeys)? else {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    };
+
+    if !creator.is_signer() {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+    if *game_account.owner() != *program_id {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    let mut data = game_account.try_borrow_mut_data()?;
+    if get_state(&data) != GameState::WaitingForPlayers {
+        msg!("Challenge already accepted or finished.");
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let p1 = get_player(&data, 0);
+    if p1.pubkey != *creator.key() {
+        msg!("Only the creator can cancel an unaccepted challenge.");
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    set_state(&mut data, GameState::Finished);
+    let buy_in = get_buy_in(&data);
+    drop(data);
+    msg!("Challenge manually cancelled by creator: {:?}", creator.key());
+    transfer_prize(creator, game_account, buy_in)
 }
 
 

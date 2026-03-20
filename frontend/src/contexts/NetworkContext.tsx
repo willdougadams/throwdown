@@ -26,14 +26,21 @@ const NetworkContext = createContext<NetworkContextType | undefined>(undefined);
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const [network, setNetworkState] = useState<Network>(() => {
     const stored = localStorage.getItem('solana-network');
-    if (stored === 'localnet' || stored === 'devnet' || stored === 'mainnet-beta' || stored === 'custom') {
+    
+    // Migrate existing localnet configurations to devnet
+    if (stored === 'localnet') {
+      localStorage.setItem('solana-network', 'devnet');
+      return 'devnet';
+    }
+    
+    if (stored === 'devnet' || stored === 'mainnet-beta' || stored === 'custom') {
       return stored as Network;
     }
 
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'localnet';
+        return 'devnet';
       }
     }
 
@@ -52,8 +59,8 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
   const rpcUrl = useMemo(() => {
     if (network === 'localnet') return 'http://127.0.0.1:8899';
     if (network === 'devnet') return 'https://api.devnet.solana.com';
-    if (network === 'mainnet-beta') return import.meta.env.VITE_HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
-    return customRpcUrl || import.meta.env.VITE_HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    if (network === 'mainnet-beta') return 'https://api.mainnet-beta.solana.com';
+    return customRpcUrl || 'https://api.mainnet-beta.solana.com';
   }, [network, customRpcUrl]);
 
   const connection = useMemo(() => new Connection(rpcUrl, 'confirmed'), [rpcUrl]);

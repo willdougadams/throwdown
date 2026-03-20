@@ -99,8 +99,44 @@ function execWithCapture(command, args = [], options = {}) {
     return result;
 }
 
+/**
+ * Executes a command, streams output to console, and captures it.
+ */
+function execStreamingCapture(command, args = [], options = {}) {
+    const { cmd, args: finalArgs, useShell } = translateCommand(command, args);
+
+    return new Promise((resolve) => {
+        const displayArgs = finalArgs.map(arg => arg.includes(' ') ? `"${arg}"` : arg).join(' ');
+        console.log(`> ${cmd} ${displayArgs}`);
+
+        const child = spawn(cmd, finalArgs, {
+            shell: useShell,
+            cwd: options.cwd || process.cwd(),
+            env: { ...process.env, ...options.env }
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (data) => {
+            const str = data.toString();
+            stdout += str;
+            process.stdout.write(str);
+        });
+
+        child.stderr.on('data', (data) => {
+            const str = data.toString();
+            stderr += str;
+            process.stderr.write(str);
+        });
+
+        child.on('close', (code) => resolve({ status: code, stdout, stderr }));
+        child.on('error', (err) => resolve({ status: 1, stdout: '', stderr: err.message }));
+    });
+}
+
 function rootPath(...parts) {
     return path.join(__dirname, '..', ...parts);
 }
 
-module.exports = { exec, execWithCapture, rootPath, isWindows, toWslPath };
+module.exports = { exec, execWithCapture, execStreamingCapture, rootPath, isWindows, toWslPath };

@@ -62,22 +62,6 @@ export function GamesProvider({ children }: { children: React.ReactNode }) {
       setRpsGames(mappedRpsGames);
       setChessGames(mappedChessGames);
 
-      // Construct a unified challenges list for the lobby
-      // Only include waiting games, or games the active user is participating in
-      const validRpsGames = mappedRpsGames.filter(g => g.status === 'waiting' || g.isParticipating);
-      // For chess, 'in_progress' is also relevant to show for participants
-      const validChessGames = mappedChessGames.filter(g => g.status === 'waiting' || (g.status === 'in_progress' && g.isParticipating));
-
-      const merged = [...validRpsGames, ...validChessGames];
-      // Sort: waiting first, then by highest buy-in
-      merged.sort((a, b) => {
-        if (a.status === 'waiting' && b.status !== 'waiting') return -1;
-        if (a.status !== 'waiting' && b.status === 'waiting') return 1;
-        return b.buyInSOL - a.buyInSOL;
-      });
-
-      setAllChallenges(merged);
-
     } catch (err) {
       console.error('Error fetching games:', err);
       setError('Failed to load games. Please try again.');
@@ -86,12 +70,84 @@ export function GamesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [connection, activeClient, publicKey]);
 
-  // Initial fetch and setup polling interval
+  // Derive merged challenges whenever rps or chess games change
+  useEffect(() => {
+    const validRpsGames = rpsGames.filter(g => g.status === 'waiting' || g.isParticipating);
+    const validChessGames = chessGames.filter(g => g.status === 'waiting' || (g.status === 'in_progress' && g.isParticipating));
+
+    const merged = [...validRpsGames, ...validChessGames];
+    // Sort: waiting first, then by highest buy-in
+    merged.sort((a, b) => {
+      if (a.status === 'waiting' && b.status !== 'waiting') return -1;
+      if (a.status !== 'waiting' && b.status === 'waiting') return 1;
+      return b.buyInSOL - a.buyInSOL;
+    });
+
+    setAllChallenges(merged);
+  }, [rpsGames, chessGames]);
+
+  // Initial fetch and setup SSE listener
   useEffect(() => {
     refreshGames();
-    const interval = setInterval(refreshGames, 10000);
-    return () => clearInterval(interval);
-  }, [refreshGames]);
+    
+    let unsubscribe: (() => void) | undefined;
+    if (activeClient.onBanyanUpdate) {
+      unsubscribe = activeClient.onBanyanUpdate((event: any) => {
+        if (event.type === 'game_update') {
+          const game = event.data;
+          const type = event.gameType;
+
+          const isCreator = publicKey ? game.creator === publicKey.toString() : false;
+          const isParticipating = publicKey ? game.player_addresses.includes(publicKey.toString()) : false;
+          
+          const enriched: EnrichedGame = {
+              id: game.game_address,
+              name: game.name,
+              description: game.description,
+              status: game.state === 'WaitingForPlayers' ? 'waiting' :
+                  game.state === 'Finished' ? 'completed' : 'in_progress',
+              players: game.player_addresses,
+              maxPlayers: game.max_players,
+              createdAt: new Date(game.last_action_timestamp * 1000).toISOString().split('T')[0],
+              buyInSOL: Number(game.buy_in_lamports) / 1_000_000_000,
+              creator: game.creator,
+              prizePool: Number(game.prize_pool) / 1_000_000_000,
+              winner: game.winner,
+              lamports: game.lamports || 0,
+              gameType: type,
+              isCreator,
+              isParticipating
+          };
+
+          if (type === 'rps') {
+            setRpsGames(prev => {
+              const idx = prev.findIndex(g => g.id === enriched.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = enriched;
+                return next;
+              }
+              return [...prev, enriched];
+            });
+          } else if (type === 'chess') {
+            setChessGames(prev => {
+              const idx = prev.findIndex(g => g.id === enriched.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = enriched;
+                return next;
+              }
+              return [...prev, enriched];
+            });
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [refreshGames, activeClient, publicKey]);
 
   return (
     <GamesContext.Provider value={{

@@ -5,8 +5,8 @@ type Network = 'localnet' | 'devnet' | 'mainnet-beta' | 'custom';
 
 // Auto-detect network from localStorage or URL
 function getCurrentNetwork(): Network {
-  if (typeof window === 'undefined') return 'localnet';
-
+  if (typeof window === 'undefined') return 'devnet';
+  
   // First, check localStorage for user's network selection
   const stored = localStorage.getItem('solana-network');
   if (stored === 'localnet' || stored === 'devnet' || stored === 'mainnet-beta' || stored === 'custom') {
@@ -23,7 +23,7 @@ function getCurrentNetwork(): Network {
     hostname.startsWith('10.') ||
     hostname.endsWith('.local')
   ) {
-    return 'localnet';
+    return 'devnet';
   }
 
   return 'mainnet-beta';

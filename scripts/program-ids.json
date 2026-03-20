@@ -5,9 +5,9 @@
     "chess": "5jXyYa9DUNLEDRgSJLKeS4qFodk2AdyqFdDt1sMNyqFb"
   },
   "devnet": {
-    "banyan": "8FkJUUZFMkhXkXHqcx3aLxvE54z89JofKJbvoxzKLmGg",
-    "rps": "8KYGcmrzMW8bciXQCPn525GhPcb2hmeJs3SoHAHR3gGM",
-    "chess": "6VKrJHfFC22zgY62JJRWmDs3jgHjEdeLaxzgN86xrmg5"
+    "banyan": "EQVfrFVrHeFTMRdJV8gH4qwoumJC6UbzRMNYmUHXJEbg",
+    "rps": "Bh9VGKeYemHGuzK9wnU3VC7fwoDd891TXQQEALaWP2mZ",
+    "chess": "7bqxwZi9zEr9c9EqF4YabpWMcroxeTSgAfo2kNJSVkMo"
   },
   "mainnet": {
     "banyan": "8FkJUUZFMkhXkXHqcx3aLxvE54z89JofKJbvoxzKLmGg",
@@ -15,7 +15,7 @@
     "chess": "6VKrJHfFC22zgY62JJRWmDs3jgHjEdeLaxzgN86xrmg5"
   },
   "last_updated": {
-    "devnet": "2026-03-11T22:22:47.657Z",
+    "devnet": "2026-03-20T18:57:13.641Z",
     "localnet": "2026-03-06T21:27:44.473Z",
     "mainnet": "2026-03-19T00:09:56.891Z"
   }

@@ -1,4 +1,4 @@
-const { exec, execWithCapture, rootPath } = require('./utils');
+const { exec, execWithCapture, execStreamingCapture, rootPath } = require('./utils');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
@@ -24,10 +24,18 @@ async function deploy() {
         let rpcUrl = customUrl;
         if (!rpcUrl) {
             rpcUrl = 'http://127.0.0.1:8899';
-            if (network === 'devnet') {
-                rpcUrl = process.env.HELIUS_DEVNET_RPC_URL || 'https://api.devnet.solana.com';
-            } else if (network === 'mainnet') {
-                rpcUrl = process.env.HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
+            if (process.env.RPC_URL) {
+                if (network === 'devnet') {
+                    rpcUrl = process.env.RPC_URL.replace('mainnet', 'devnet');
+                } else if (network === 'mainnet') {
+                    rpcUrl = process.env.RPC_URL;
+                }
+            } else {
+                if (network === 'devnet') {
+                    rpcUrl = 'https://api.devnet.solana.com';
+                } else if (network === 'mainnet') {
+                    rpcUrl = 'https://api.mainnet-beta.solana.com';
+                }
             }
         }
         console.log(`🌐 Cluster URL: ${rpcUrl}`);
@@ -70,7 +78,7 @@ async function deploy() {
             try {
                 if (network === 'mainnet') {
                     console.log('🔗 Uploading buffer with local wallet (NO Ledger prompts required)...');
-                    const writeRes = execWithCapture('solana', ['program', 'write-buffer', soFile, '--keypair', signer, '--with-compute-unit-price', '100000', '--max-sign-attempts', '1000', '--use-rpc']);
+                    const writeRes = await execStreamingCapture('solana', ['program', 'write-buffer', soFile, '--keypair', signer, '--with-compute-unit-price', '100000', '--max-sign-attempts', '1000', '--use-rpc', '-u', rpcUrl]);
                     
                     if (writeRes.status !== 0) {
                         console.error('❌ Failed to write buffer:', writeRes.stderr || writeRes.stdout);
@@ -90,11 +98,11 @@ async function deploy() {
                     await exec('solana', ['program', 'set-buffer-authority', bufferId, '--new-buffer-authority', 'usb://ledger?key=0', '--keypair', signer]);
                     
                     console.log(`🔗 Please approve the ONE FINAL upgrade transaction on your Ledger device!`);
-                    await exec('solana', ['program', 'deploy', '--buffer', bufferId, '--program-id', existingId, '--keypair', signer, '--upgrade-authority', 'usb://ledger?key=0']);
+                    await exec('solana', ['program', 'deploy', '--buffer', bufferId, '--program-id', existingId, '--keypair', signer, '--upgrade-authority', 'usb://ledger?key=0', '--with-compute-unit-price', '100000', '--max-sign-attempts', '100', '-u', rpcUrl]);
                     console.log('✅ Program upgraded successfully!');
                     process.exit(0);
                 } else {
-                    await exec('solana', ['program', 'deploy', soFile, '--program-id', existingId, '--keypair', signer]);
+                    await exec('solana', ['program', 'deploy', soFile, '--program-id', existingId, '--keypair', signer, '--with-compute-unit-price', '100000', '--max-sign-attempts', '100', '-u', rpcUrl]);
                     console.log('✅ Program upgraded successfully!');
                     process.exit(0);
                 }
@@ -110,7 +118,7 @@ async function deploy() {
         }
 
         console.log('📦 Deploying fresh program...');
-        let deployArgs = ['program', 'deploy', soFile, '--keypair', signer];
+        let deployArgs = ['program', 'deploy', soFile, '--keypair', signer, '--with-compute-unit-price', '100000', '--max-sign-attempts', '100', '-u', rpcUrl];
 
         if (network !== 'localnet') {
             if (!fs.existsSync(keypairFile)) {

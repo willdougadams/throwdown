@@ -167,6 +167,37 @@ class Web3ProgramClient {
     return signature;
   }
 
+  async cancelChallenge(gameId: string): Promise<string> {
+    if (!this.wallet.publicKey || !this.wallet.signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    const gameAccount = new PublicKey(gameId);
+    
+    // Instruction index 4 is CancelChallenge for RPS
+    const instructionData = Buffer.from([4]);
+
+    const transaction = new Transaction();
+    transaction.add(new TransactionInstruction({
+      keys: [
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: gameAccount, isSigner: false, isWritable: true },
+      ],
+      programId: this.programId,
+      data: instructionData,
+    }));
+
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = this.wallet.publicKey;
+
+    const signedTransaction = await this.wallet.signTransaction(transaction);
+    const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
+    await this.connection.confirmTransaction(signature, 'confirmed');
+
+    return signature;
+  }
+
   async revealMoves(gameId: string, moves: number[], salt: bigint): Promise<string> {
     if (!this.wallet.publicKey || !this.wallet.signTransaction) {
       throw new Error('Wallet not connected');
@@ -361,6 +392,38 @@ class Web3ProgramClient {
       ],
       programId: chessProgramId,
       data: Buffer.from(instructionData),
+    }));
+
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = this.wallet.publicKey;
+
+    const signedTransaction = await this.wallet.signTransaction(transaction);
+    const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
+    await this.connection.confirmTransaction(signature, 'confirmed');
+
+    return signature;
+  }
+
+  async cancelChessChallenge(gameId: string): Promise<string> {
+    if (!this.wallet.publicKey || !this.wallet.signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    const chessProgramId = getProgramId('chess');
+    const gameAccount = new PublicKey(gameId);
+
+    // Instruction index 4 is CancelChallenge for Chess
+    const instructionData = Buffer.from([4]);
+
+    const transaction = new Transaction();
+    transaction.add(new TransactionInstruction({
+      keys: [
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: gameAccount, isSigner: false, isWritable: true },
+      ],
+      programId: chessProgramId,
+      data: instructionData,
     }));
 
     const { blockhash } = await this.connection.getLatestBlockhash();
